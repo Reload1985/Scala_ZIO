@@ -130,7 +130,12 @@ object ZIOEffects {
     if(n <= 2) 1
     else fibo(n - 1) + fibo(n - 2)
 
-  //bla bla
+  def fiboZIO(n: Int): UIO[BigInt] =
+    if(n <= 2 ) 1
+    else for {
+      last <- fiboZIO(n - 1)
+      prev <- fiboZIO(n - 2)
+    } yield last + prev
 
   def main(args: Array[String]): Unit = {
     val runtime = Runtime.default
