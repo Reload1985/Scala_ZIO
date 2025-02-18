@@ -131,7 +131,7 @@ object ZIOEffects {
     else fibo(n - 1) + fibo(n - 2)
 
   def fiboZIO(n: Int): UIO[BigInt] =
-    if(n <= 2 ) 1
+    if(n <= 2 ) ZIO.succeed(1)
     else for {
       last <- fiboZIO(n - 1)
       prev <- fiboZIO(n - 2)

@@ -1,0 +1,123 @@
+🔹 1. Criar e Configurar um Repositório
+Se quiser criar um repositório do zero no seu computador:
+
+# Criar uma pasta e entrar nela
+mkdir MeuProjeto; cd MeuProjeto
+
+# Inicializar um repositório Git
+git init
+
+# Configurar usuário (se necessário)
+git config --global user.name "Seu Nome"
+git config --global user.email "seu-email@example.com"
+Se estiver conectando a um repositório remoto (exemplo: GitHub, GitLab):
+
+git remote add origin https://github.com/usuario/repositorio.git
+
+
+🔹 2. Clonar um Repositório Existente
+Se for trabalhar em um projeto já existente:
+
+git clone https://github.com/usuario/repositorio.git
+cd repositorio
+
+
+🔹 3. Verificar o Status do Repositório
+Antes de qualquer coisa, veja o que mudou:
+
+git status
+
+
+🔹 4. Trabalhar com Arquivos (Adicionar, Comitar, Descartar)
+Adicionar arquivos ao controle de versão
+
+git add nome-do-arquivo.txt  # Adiciona um arquivo específico
+git add .                    # Adiciona todos os arquivos modificados
+Fazer um commit (salvar as mudanças localmente)
+
+git commit -m "Descrição do que foi alterado"
+Desfazer mudanças antes do commit
+
+git restore nome-do-arquivo.txt  # Restaura o arquivo modificado para a última versão do commit
+git restore --staged nome-do-arquivo.txt  # Remove um arquivo do 'git add'
+
+
+🔹 5. Sincronizar com o Repositório Remoto
+Baixar as alterações mais recentes
+
+git pull origin main  # Ou outro nome de branch, como 'develop'
+Enviar suas mudanças para o repositório remoto
+
+git push origin main
+Se for a primeira vez empurrando uma branch, use:
+
+git push --set-upstream origin minha-branch
+
+
+🔹 6. Trabalhar com Branches
+Criar uma nova branch e trocar para ela
+
+git checkout -b minha-branch
+Alternar entre branches existentes
+
+git checkout main
+Listar todas as branches
+
+git branch
+Excluir uma branch local
+
+git branch -d minha-branch  # Se já foi mesclada
+git branch -D minha-branch  # Força a exclusão sem mesclar
+Subir uma nova branch para o repositório remoto
+
+git push -u origin minha-branch
+
+
+🔹 7. Criar e Mesclar Pull Requests (PRs)
+No GitHub, você pode abrir um PR via terminal (se tiver a CLI do GitHub instalada):
+
+gh pr create --title "Nova feature" --body "Descrição das mudanças"
+Ou faça isso manualmente pelo GitHub/GitLab.
+
+Para mesclar uma branch no main:
+
+git checkout main
+git merge minha-branch
+git push origin main
+Se houver conflitos, resolva-os nos arquivos afetados e finalize o merge com:
+
+git add .
+git commit -m "Resolve merge conflicts"
+git push origin main
+
+
+🔹 8. Reverter e Resetar Commits
+Desfazer o último commit (mantendo as alterações no código)
+
+git reset --soft HEAD~1
+Desfazer o último commit (apagando as alterações no código)
+
+git reset --hard HEAD~1
+
+
+🔹 9. Trabalhar com Tags (Versões do Projeto)
+Criar uma tag
+
+git tag -a v1.0 -m "Primeira versão estável"
+git push origin v1.0
+Listar todas as tags
+
+git tag
+Remover uma tag
+
+git tag -d v1.0
+git push origin --delete v1.0
+
+
+🔹 10. Ver Logs e Histórico de Commits
+Ver um resumo dos commits
+
+git log --oneline --graph --decorate --all
+Ver detalhes de um commit específico
+
+git show <id-do-commit>
