@@ -1,0 +1,89 @@
+O que são os aliases do ZIO?
+Os aliases (UIO, RIO, URIO, etc.) são apenas versões especializadas do ZIO que removem parâmetros desnecessários.
+
+Lembra que um efeito ZIO[R, E, A] tem 3 partes:
+
+R → Dependências necessárias (ex.: conexão com DB).
+E → Tipo do erro que pode ocorrer.
+A → Tipo do valor de retorno.
+Quando algumas dessas partes não são necessárias, usamos aliases!
+
+--------------------------------------------------------  !!!!!!! --------------------------------------------------------
+
+Principais Aliases do ZIO
+
+Alias       |	Equivalente a ZIO[R, E, A]  |	O que significa?
+
+UIO[A]      |	ZIO[Any, Nothing, A]        |	Efeito sem falha garantida (nunca dá erro).
+RIO[R, A]   |	ZIO[R, Throwable, A]        |	Efeito que pode falhar, mas requer R (ex.: DB).
+URIO[R, A]  |	ZIO[R, Nothing, A]          |	Requer R (ex.: DB), mas nunca falha.
+Task[A]     |	ZIO[Any, Throwable, A]      |	Efeito que pode falhar com Throwable, mas não precisa de R.
+
+
+Aplicação prática no sistema de tarefas
+Imagina que temos um serviço que:
+
+Cria uma tarefa no DB.
+Busca uma tarefa.
+Marca uma tarefa como concluída.
+Agora vamos usar os aliases corretamente!
+
+1️⃣ Criar uma tarefa (sem falha garantida) → UIO[Task]
+
+    import zio.*
+
+    case class Task(id: Int, description: String, completed: Boolean)
+
+    object TaskService {
+    def createTask(description: String): UIO[Task] =
+        ZIO.succeed(Task(1, description, completed = false)) // Nunca falha
+    }
+Por que UIO?
+
+Não depende de nada (Any).
+Não pode falhar (Nothing).
+Retorna uma Task.
+
+2️⃣ Buscar uma tarefa do DB (pode falhar) → RIO[Database, Task]
+
+trait Database {
+  def fetchTask(id: Int): Task
+}
+
+object TaskService {
+  def getTask(id: Int): RIO[Database, Task] =
+    ZIO.serviceWithZIO[Database](_.fetchTask(id))
+}
+Por que RIO[Database, Task]?
+
+Requer uma Database para funcionar (R = Database).
+Pode falhar (E = Throwable).
+Retorna uma Task.
+
+3️⃣ Marcar uma tarefa como concluída (não falha, mas precisa do DB) → URIO[Database, Unit]
+
+object TaskService {
+  def completeTask(id: Int): URIO[Database, Unit] =
+    ZIO.serviceWithZIO[Database] { db =>
+      ZIO.succeed(println(s"Tarefa $id concluída!"))
+    }
+}
+Por que URIO[Database, Unit]?
+
+Requer Database (R = Database).
+Nunca falha (E = Nothing).
+Retorna Unit (efeito sem retorno útil).
+
+
+📌 Resumo prático
+Método                    |	    Alias               |	Por quê?
+createTask(desc: String)  |	    UIO[Task]           |	Criar tarefa nunca falha.
+getTask(id: Int)          |	RIO[Database, Task]     |	Buscar tarefa pode falhar e requer DB.
+completeTask(id: Int)     |	URIO[Database, Unit]    |	Atualizar tarefa requer DB, mas nunca falha.
+
+
+📌 Conclusão
+Usa UIO[A] quando nunca há falha.
+Usa RIO[R, A] quando há falha e precisa de dependências.
+Usa URIO[R, A] quando precisa de dependências mas nunca falha.
+Usa Task[A] quando pode falhar mas não precisa de dependências.

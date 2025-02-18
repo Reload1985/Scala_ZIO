@@ -116,7 +116,21 @@ object ZIOEffects {
     if(n == 0) 0
     else n + sum(n - 1) // will crash at sum(20 000)
 
-  def sumZIO(n: Int): Int = ???
+  def sumZIO(n: Int): UIO[Int] =
+    if(n == 0) ZIO.succeed(0)
+    else for {
+      current <- ZIO.succeed(n)
+      prevSum <- sumZIO(n - 1)
+    } yield current + prevSum
+
+
+  // 7 - fibonacci
+  // hint: use ZIO.suspend / ZIO.suspendSucceed
+  def fibo(n: Int): BigInt =
+    if(n <= 2) 1
+    else fibo(n - 1) + fibo(n - 2)
+
+  //bla bla
 
   def main(args: Array[String]): Unit = {
     val runtime = Runtime.default
