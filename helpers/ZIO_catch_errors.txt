@@ -1,0 +1,146 @@
+1️⃣ catchAll → Capturar TODOS os erros
+
+val catchError = anAttempt.catchAll(e => ZIO.attempt(s"Returning a different value because $e"))
+📌 O que faz?
+
+Se anAttempt falhar, captura qualquer erro (Throwable) e executa ZIO.attempt(...).
+Aqui, estamos apenas retornando uma string explicando o erro.
+✅ Exemplo no Trello:
+Se ao criar uma tarefa houver um erro (ex.: falha de conexão ao banco), podemos retornar uma mensagem amigável:
+
+def createTask(task: Task): ZIO[Any, Throwable, String] =
+  insertTaskIntoDB(task)
+    .catchAll(_ => ZIO.succeed("Falha ao criar tarefa. Tente novamente."))
+
+
+2️⃣ catchSome → Capturar ALGUNS erros específicos
+
+val catchSelectiveErrors = anAttempt.catchSome {
+  case e: RuntimeException => ZIO.succeed(s"Ignoring runtime exceptions: $e")
+  case _ => ZIO.succeed("Ignoring everything else")
+}
+📌 O que faz?
+
+Filtra os erros por tipo.
+Se for RuntimeException, retorna uma mensagem específica.
+Se for outro erro, ignora ou trata de forma diferente.
+✅ Exemplo no Trello:
+Se houver um erro ao remover uma tarefa, mas queremos tratar apenas erros de tarefa inexistente (ex.: TaskNotFoundException), podemos fazer:
+
+
+def removeTask(id: Int): ZIO[Any, Throwable, String] =
+  deleteTaskFromDB(id).catchSome {
+    case _: TaskNotFoundException => ZIO.succeed(s"A tarefa $id não existe!")
+  }
+🔹 Erros diferentes de TaskNotFoundException continuarão propagando.
+
+
+3️⃣ orElse → Substituir o erro por um valor padrão
+
+val aBetterAttempt = anAttempt.orElse(ZIO.succeed(56))
+📌 O que faz?
+
+Se anAttempt falhar, ele substitui pelo efeito ZIO.succeed(56).
+✅ Exemplo no Trello:
+Se ao buscar uma tarefa, o banco de dados falhar, podemos fornecer uma tarefa padrão:
+
+def getTask(id: Int): ZIO[Any, Throwable, Task] =
+  fetchTaskFromDB(id).orElse(ZIO.succeed(Task(id, "Tarefa Padrão", "Sem descrição")))
+🔹 Evita que o sistema quebre se houver um erro inesperado.
+
+
+4️⃣ fold → Lidar com SUCESSO e FALHA de forma síncrona
+
+val handleBoth: ZIO[Any, Nothing, String] = anAttempt.fold(
+  ex => s"Something bad happened: $ex", 
+  value => s"length of the string was $value"
+)
+📌 O que faz?
+
+Se anAttempt falhar, executa ex => ....
+Se anAttempt tiver sucesso, executa value => ....
+✅ Exemplo no Trello:
+Se ao atribuir uma tarefa a um usuário ocorrer erro, podemos tratar assim:
+
+def assignTask(taskId: Int, userId: Int): ZIO[Any, Nothing, String] =
+  saveAssignment(taskId, userId).fold(
+    ex => s"Falha ao atribuir tarefa: $ex",
+    _ => s"Tarefa $taskId atribuída ao usuário $userId"
+  )
+🔹 Garante que o sistema sempre retorna uma string, independente do sucesso ou erro.
+
+
+
+5️⃣ foldZIO → Lidar com SUCESSO e FALHA de forma assíncrona
+
+val handleBoth_v2 = anAttempt.foldZIO(
+  ex => ZIO.succeed(s"Something bad happened: $ex"),
+  value => ZIO.succeed(s"Length of the string was $value")
+)
+📌 O que faz?
+
+Igual ao fold, MAS permite que os tratamentos retornem um efeito ZIO em vez de apenas valores simples.
+✅ Exemplo no Trello:
+Se ao finalizar uma tarefa houver erro (ex.: banco de dados indisponível), podemos salvar o erro num log:
+
+def completeTask(taskId: Int): ZIO[Any, Nothing, String] =
+  markTaskAsComplete(taskId).foldZIO(
+    ex => logError(s"Erro ao completar tarefa $taskId: $ex").as("Erro ao completar tarefa"),
+    _ => ZIO.succeed(s"Tarefa $taskId completada!")
+  )
+🔹 Diferente do fold, foldZIO permite efeitos colaterais como logging.
+
+
+📌 Quando usar cada um?
+Método    |	Quando usar?
+catchAll  |	Quando quiser capturar qualquer erro e continuar. Ex.: Se falhar ao criar uma tarefa, retornar mensagem de erro.
+catchSome |	Quando quiser capturar apenas alguns erros específicos. Ex.: Ignorar erro de tarefa inexistente ao removê-la.
+orElse    |	Quando quiser fornecer um valor padrão caso ocorra erro. Ex.: Retornar uma tarefa padrão se a busca falhar.
+fold      |	Quando quiser transformar erro ou sucesso num valor simples (sem efeitos). Ex.: Retornar mensagem de sucesso ou erro ao atribuir tarefa.
+foldZIO	  | Quando quiser tratar erro ou sucesso com efeitos colaterais. Ex.: Logar erro antes de retornar mensagem.
+
+📌 Resumo
+Esses métodos tornam o código mais seguro e previsível.
+Úteis para tratar erros em qualquer ação do sistema (criação, atribuição, remoção de tarefas).
+Usar foldZIO para efeitos mais complexos, catchAll para capturar erros globais e orElse para valores padrão.
+
+
+📌 Exemplo no Trello: Buscar uma tarefa por ID
+
+val getTaskAttempt: ZIO[Any, Throwable, Task] = ZIO.attempt {
+  println("Buscando a tarefa no banco de dados...")
+  val task: Task = findTaskById(42) // Supondo que esta função pode lançar uma exceção
+  if (task == null) throw new TaskNotFoundException("Tarefa não encontrada")
+  task
+}
+📌 O que acontece aqui?
+Tentamos buscar uma tarefa no banco de dados (findTaskById).
+Se findTaskById falhar (lançar exceção), ZIO captura e trata como efeito falho.
+Se a tarefa for null, lançamos uma exceção manualmente (throw new TaskNotFoundException(...)).
+
+
+📌 Tratando possíveis erros
+Agora, podemos tratar esse erro de forma segura:
+
+val safeGetTask = getTaskAttempt.catchAll {
+  case _: TaskNotFoundException => ZIO.succeed(Task(0, "Tarefa Padrão", "Nenhuma descrição")) // Retorna uma tarefa padrão
+  case ex => ZIO.fail(ex) // Se for outro erro, propaga
+}
+✅ Se a tarefa não for encontrada, retorna uma tarefa padrão.
+✅ Se for outro erro (ex.: erro de conexão com o banco), propaga o erro.
+
+
+📌 Melhorando ainda mais
+Podemos usar foldZIO para registrar logs antes de retornar uma resposta:
+
+val safeGetTaskWithLogs = getTaskAttempt.foldZIO(
+  ex => logError(s"Erro ao buscar tarefa: $ex").as(Task(0, "Erro", "Não foi possível carregar a tarefa")),
+  task => ZIO.succeed(task)
+)
+🔹 Se falhar, loga o erro e retorna uma "tarefa de erro".
+🔹 Se tiver sucesso, simplesmente retorna a tarefa.
+
+📌 Conclusão
+ZIO.attempt é útil para capturar exceções de código tradicional.
+Em projetos tipo Trello, podemos usá-lo para acessar banco de dados, APIs, etc.
+Combinar com catchAll, foldZIO, orElse melhora a segurança e experiência do usuário.
