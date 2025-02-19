@@ -1,0 +1,62 @@
+📌 *> – Ignora o primeiro efeito, mantém o segundo
+O *> executa dois efeitos em sequência, mas descarta o resultado do primeiro e mantém apenas o segundo.
+
+🔹 Analogia simples
+Imagina que queres ligar o carro e depois começar a conduzir.
+
+O ato de ligar o carro não tem um valor final útil.
+O que interessa é a ação seguinte: conduzir.
+🔹 Exemplo prático
+
+val effect = ZIO.succeed(println("Conectando ao banco de dados")) *> ZIO.succeed("Conexão estabelecida")
+✅ O primeiro ZIO.succeed(println(...)) é executado, mas o seu valor de retorno (Unit) é ignorado.
+✅ O que sobra é o segundo efeito, que retorna "Conexão estabelecida".
+
+Se quiséssemos manter o resultado do primeiro efeito, usaríamos zipWith ou flatMap em vez de *>.
+
+📌 Outros operadores úteis no ZIO
+Agora que já entendes *>, existem outros operadores parecidos que são muito úteis:
+
+
+
+1️⃣ <* – Mantém o primeiro efeito, ignora o segundo
+Este é o oposto de *>. Executa dois efeitos, mas mantém apenas o resultado do primeiro.
+
+val effect = ZIO.succeed("Tarefa concluída") <* ZIO.succeed(println("Logging sucesso"))
+✅ O log é impresso, mas o valor final do efeito é "Tarefa concluída".
+
+
+
+2️⃣ zip – Mantém ambos os efeitos
+Executa dois efeitos em paralelo e devolve os dois resultados.
+
+val effect = ZIO.succeed(42).zip(ZIO.succeed("Sucesso!"))
+// Retorna ZIO[Any, Nothing, (Int, String)] -> (42, "Sucesso!")
+📌 Uso recomendado: Quando precisas dos dois valores no final.
+
+
+
+3️⃣ zipWith – Combina os valores dos efeitos
+Funciona como zip, mas permite definir como os dois valores devem ser combinados.
+
+val effect = ZIO.succeed(10).zipWith(ZIO.succeed(20))(_ + _)
+// Retorna ZIO[Any, Nothing, Int] -> 30
+📌 Uso recomendado: Quando queres executar dois efeitos e combinar os valores.
+
+
+
+4️⃣ flatMap – Usa o primeiro resultado para decidir o segundo
+Se precisas que o segundo efeito dependa do valor do primeiro, flatMap é a melhor escolha.
+
+val effect = ZIO.succeed(42).flatMap(n => ZIO.succeed(n * 2))
+// Retorna 84
+📌 Uso recomendado: Quando precisas do valor do primeiro efeito para continuar.
+
+📌 Quando usar cada um?
+Operador	Executa ambos?	Qual valor mantém?	Quando usar?
+*>	Sim	Segundo efeito	Quando o primeiro efeito não tem um valor útil
+<*	Sim	Primeiro efeito	Quando o segundo efeito é só um efeito colateral (ex.: log)
+zip	Sim	Ambos os efeitos como uma tupla	Quando precisas de ambos os valores
+zipWith	Sim	Ambos os efeitos, mas combinados	Quando queres combinar os valores das execuções
+flatMap	Sim	Segundo efeito, mas depende do primeiro	Quando o segundo efeito depende do primeiro
+🚀 Faz sentido para ti agora?

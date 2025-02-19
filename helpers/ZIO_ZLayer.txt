@@ -1,0 +1,191 @@
+📌 O que são ZLayers?
+ZLayer é uma forma de gerenciar dependências automaticamente no ZIO.
+
+Em vez de instanciar manualmente os objetos e passar para outras classes, o ZLayer cuida disso por ti.
+
+👉 Benefícios do ZLayer:
+✅ Gerencia dependências automaticamente
+✅ Evita ter que passar new e objetos manualmente
+✅ Facilita a substituição de implementações (ex.: trocar o banco de dados para testes)
+✅ Evita código confuso e repetitivo
+
+📌 Explicação do código
+scala
+Copy
+Edit
+val connectionPoolLayer: ZLayer[Any, Nothing, ConnectionPool] = 
+  ZLayer.succeed(ConnectionPool.create(10))
+Cria uma instância de ConnectionPool e transforma num ZLayer.
+Any: Não depende de nada (pode ser criado a qualquer momento).
+Nothing: Não pode falhar.
+ConnectionPool: O que esse layer fornece.
+📌 Isso significa que qualquer outro serviço que precisar de um ConnectionPool pode pegar esse ZLayer automaticamente!
+
+scala
+Copy
+Edit
+val databaseLayer: ZLayer[ConnectionPool, Nothing, UserDataBase] = 
+  ZLayer.fromFunction(UserDataBase.create _)
+Cria um ZLayer para UserDataBase, mas…
+⚠️ Ele DEPENDE de um ConnectionPool!
+Quando usado, o ZIO automaticamente pega o ConnectionPoolLayer e injeta no UserDataBase.create.
+📌 Se tivesses um banco de dados diferente, poderias trocar a implementação sem mudar o resto do código.
+
+scala
+Copy
+Edit
+val emailServiceLayer = ZLayer.succeed(EmailService.create())
+Cria um ZLayer para EmailService.
+✅ Não depende de nada (Any) e não pode falhar (Nothing).
+📌 Poderia ser substituído facilmente por um mock em testes.
+scala
+Copy
+Edit
+val userSubscriptionServiceLayer = ZLayer.fromFunction(UserSubscrition.create _)
+Cria um ZLayer para UserSubscrition.
+⚠️ Depende de EmailService e UserDataBase.
+Quando chamado, o ZIO automaticamente vai procurar esses serviços e injetá-los.
+📌 Como isso tudo se encaixa?
+Com ZLayer, podes montar todas as dependências automaticamente, sem precisar fazer new ou passar objetos manualmente.
+
+Exemplo:
+
+scala
+Copy
+Edit
+val fullLayer = connectionPoolLayer ++ databaseLayer ++ emailServiceLayer ++ userSubscriptionServiceLayer
+🚀 Isso automaticamente conecta todos os serviços.
+Ordem importa! Se UserDataBase depende de ConnectionPool, o ConnectionPool precisa vir primeiro.
+Agora, qualquer código que precisar de UserSubscrition pode simplesmente fazer:
+
+scala
+Copy
+Edit
+ZIO.serviceWithZIO[UserSubscrition](_.subscribeUser(user))
+📌 O ZIO já sabe onde buscar as dependências e injeta automaticamente!
+
+📌 Quando usar ZLayer?
+Usa ZLayer quando precisas de injeção automática de dependências para: ✅ Serviços (ex.: Banco de dados, API, Logger)
+✅ Evitar código repetitivo ao criar instâncias
+✅ Trocar implementações facilmente (ex.: usar um banco de dados fake para testes)
+✅ Organizar código de forma modular e escalável
+
+📌 Resumo rápido
+Código	O que faz?	Depende de?
+connectionPoolLayer	Cria ConnectionPool	Nada (Any)
+databaseLayer	Cria UserDataBase	ConnectionPool
+emailServiceLayer	Cria EmailService	Nada (Any)
+userSubscriptionServiceLayer	Cria UserSubscrition	EmailService, UserDataBase
+
+
+------------------------------------------------ !!!! --------------------------------------------------------
+
+📌 O que acontece aqui?
+Neste código, estás a compor ZLayers de diferentes formas para criar um sistema de dependências organizado e automático.
+
+📌 Objetivo: Criar um UserSubscrition que precisa de UserDataBase e EmailService, mas sem instanciar manualmente cada objeto.
+
+🔹 Passo 1: Criar os Layers Individuais
+Cada ZLayer representa um serviço que pode ser usado no sistema.
+
+1️⃣ Criando a conexão com o banco
+scala
+Copy
+Edit
+val connectionPoolLayer: ZLayer[Any, Nothing, ConnectionPool] = 
+  ZLayer.succeed(ConnectionPool.create(10))
+Não depende de nada (Any)
+Não pode falhar (Nothing)
+Fornece um ConnectionPool
+2️⃣ Criando o banco de dados
+scala
+Copy
+Edit
+val databaseLayer: ZLayer[ConnectionPool, Nothing, UserDataBase] = 
+  ZLayer.fromFunction(UserDataBase.create _)
+Depende de ConnectionPool (porque UserDataBase precisa de uma conexão).
+Não pode falhar (Nothing)
+Fornece um UserDataBase
+3️⃣ Criando o serviço de email
+scala
+Copy
+Edit
+val emailServiceLayer: ZLayer[Any, Nothing, EmailService] = 
+  ZLayer.succeed(EmailService.create())
+Não depende de nada (Any)
+Não pode falhar (Nothing)
+Fornece um EmailService
+4️⃣ Criando o serviço de subscrição
+scala
+Copy
+Edit
+val userSubscriptionServiceLayer: ZLayer[UserDataBase with EmailService, Nothing, UserSubscrition] = 
+  ZLayer.fromFunction(UserSubscrition.create _)
+Depende de UserDataBase e EmailService
+Não pode falhar (Nothing)
+Fornece um UserSubscrition
+📌 Composição de ZLayer
+Agora que criaste os layers individuais, precisas combiná-los corretamente.
+
+🔹 Passo 2: Compor Verticalmente (>>>)
+Vertical composition (>>>) pega um output e transforma no input do próximo layer.
+
+scala
+Copy
+Edit
+val databaseLayerFull: ZLayer[Any, Nothing, UserDataBase] = 
+  connectionPoolLayer >>> databaseLayer
+✅ O que acontece aqui?
+
+databaseLayer precisa de ConnectionPool.
+connectionPoolLayer fornece ConnectionPool.
+>>> liga os dois automaticamente.
+📌 Agora temos um UserDataBase pronto para ser usado.
+
+🔹 Passo 3: Compor Horizontalmente (++)
+Horizontal composition (++) combina vários layers diferentes, criando um novo layer que contém ambos.
+
+scala
+Copy
+Edit
+val subscriptionRequirementsLayer: ZLayer[Any, Nothing, UserDataBase with EmailService] =
+  databaseLayerFull ++ emailServiceLayer
+✅ O que acontece aqui?
+
+databaseLayerFull fornece UserDataBase.
+emailServiceLayer fornece EmailService.
+++ junta os dois.
+📌 Agora temos um layer que contém UserDataBase e EmailService juntos.
+
+🔹 Passo 4: Criar o Serviço de Subscrição
+Agora que já temos todas as dependências (UserDataBase + EmailService), podemos criar o UserSubscrition:
+
+scala
+Copy
+Edit
+val userSubscritionLayer: ZLayer[Any, Nothing, UserSubscrition] =
+  subscriptionRequirementsLayer >>> userSubscriptionServiceLayer
+✅ O que acontece aqui?
+
+userSubscriptionServiceLayer precisa de UserDataBase e EmailService.
+subscriptionRequirementsLayer já contém essas dependências.
+>>> liga os dois automaticamente.
+📌 Agora temos um ZLayer que nos dá um UserSubscrition, pronto para uso.
+
+📌 Resumo Rápido
+Código	O que faz?	Depende de?	Fornece
+connectionPoolLayer	Cria um ConnectionPool	Nada (Any)	ConnectionPool
+databaseLayer	Cria um UserDataBase	ConnectionPool	UserDataBase
+emailServiceLayer	Cria um EmailService	Nada (Any)	EmailService
+userSubscriptionServiceLayer	Cria UserSubscrition	UserDataBase, EmailService	UserSubscrition
+databaseLayerFull	Composição vertical (>>>)	ConnectionPool	UserDataBase
+subscriptionRequirementsLayer	Composição horizontal (++)	Nada (Any)	UserDataBase, EmailService
+userSubscritionLayer	Composição final (>>>)	Nada (Any)	UserSubscrition
+📌 Quando usar >>> e ++?
+Operador	Quando usar?	Exemplo
+>>> (Vertical)	Quando um layer precisa do output do outro	connectionPoolLayer >>> databaseLayer
+++ (Horizontal)	Quando dois layers não dependem um do outro, mas precisas dos dois	databaseLayerFull ++ emailServiceLayer
+📌 Conclusão
+📌 O ZLayer permite criar sistemas modulares e escaláveis, gerenciando dependências automaticamente.
+📌 Com >>> e ++, podes combinar diferentes partes do teu sistema de forma clara e flexível.
+📌 Agora podes usar userSubscritionLayer sem te preocupar em instanciar objetos manualmente.

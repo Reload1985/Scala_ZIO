@@ -1,0 +1,85 @@
+📌 Diferença entre class, case class e object
+Tipo            |	Pode ser instanciado com new?   |	Pode ter estado mutável?    |	Tem apply automático?   |	Tem equals e hashCode automáticos?
+class           |	        ✅ Sim	                            ✅ Sim                       ❌ Não	                        ❌ Não
+case class      |	        ✅ Sim	                            ❌ Não (imutável)	        ✅ Sim	                        ✅ Sim
+object          |	        ❌ Não (Singleton)	                ✅ Sim	                    ❌ Não	                        ✅ Sim
+
+
+📌 O que está acontecendo no código?
+Esse código simula um sistema de inscrição de usuários usando ZIO e injeção de dependências.
+
+Um usuário (User) é representado por uma case class
+A classe UserSubscrition inscreve um usuário, enviando um email e salvando no banco.
+Cada funcionalidade tem sua própria classe:
+EmailService: Envia um email de boas-vindas.
+UserDataBase: Insere um usuário no banco de dados.
+ConnectionPool: Gera conexões com o banco.
+Connection: Simula uma conexão real.
+O subscritionService cria todas as instâncias e injeta as dependências.
+O run (ainda não implementado) seria a entrada principal do programa.
+
+
+📌 Explicação prática de class, case class e object no código
+1️⃣ case class User(name: String, email: String)
+case class é usada porque representa um modelo de dados (imutável, com equals e hashCode automáticos).
+Exemplo de uso:
+
+val user = User("Alice", "alice@email.com")
+✅ Não precisa de new.
+✅ Possui equals e hashCode, útil para comparação e uso em coleções (Set, Map).
+
+
+2️⃣ class UserSubscrition(emailService: EmailService, userDataBase: UserDataBase)
+Aqui, class é usada porque precisamos instanciar objetos diferentes com dependências diferentes.
+Tem um método subscribeUser que executa os efeitos do ZIO.
+Exemplo de uso:
+
+val subscription = new UserSubscrition(new EmailService, new UserDataBase(new ConnectionPool(10)))
+❌ Precisa de new porque não é um singleton.
+✅ Pode ter estado interno, se necessário.
+
+
+3️⃣ object UserSubscrition
+Usado para criar uma fábrica (factory) da classe UserSubscrition, simplificando a inicialização:
+
+val subscription = UserSubscrition.create(new EmailService, new UserDataBase(new ConnectionPool(10)))
+✅ Facilita a criação da instância.
+✅ Não precisa de new na criação.
+
+
+4️⃣ class EmailService e class UserDataBase
+São serviços, então faz sentido que sejam classes normais para permitir várias instâncias.
+Exemplo de uso:
+
+val emailService = new EmailService()
+emailService.email(User("Alice", "alice@email.com"))
+
+
+5️⃣ object EmailService e object UserDataBase
+São companions objects, usados para criar instâncias mais facilmente:
+
+val emailService = EmailService.create()
+✅ Encapsula a lógica de criação.
+✅ Evita precisar chamar new diretamente.
+
+
+6️⃣ class ConnectionPool(nConnection: Int) e object ConnectionPool
+class ConnectionPool mantém um estado (nConnection), então faz sentido ser uma class.
+object ConnectionPool é uma factory, facilitando a criação de instâncias.
+
+val pool = ConnectionPool.create(10)
+✅ Melhor que new ConnectionPool(10), pois pode conter lógica extra.
+
+
+7️⃣ object ZIODependencies extends ZIOAppDefault
+Esse object é um singleton e representa a aplicação inteira.
+extends ZIOAppDefault significa que ele pode rodar como uma aplicação ZIO:
+
+def run = ???
+Aqui entraria a lógica principal do programa.
+
+📌 Resumo rápido
+Tipo        |	Quando usar?
+class       |	Quando precisas de uma instância com estado ou injeção de dependência.
+case class  |	Para modelos de dados imutáveis que precisam de equals e hashCode.
+object      |	Para singletons, factories e companions objects que criam instâncias de classes.
