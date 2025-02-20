@@ -149,7 +149,7 @@ object ZIODependencies extends ZIOAppDefault {
     // and if you have multiple layers of the same type
     // and tell you the dependency graph
     // ZLayer.Debug.tree
-    ZLayer.Debug.mermaid
+    //ZLayer.Debug.mermaid
   )
 
   // magic v2

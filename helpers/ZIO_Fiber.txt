@@ -1,0 +1,217 @@
+O que são Fibers?
+São como "threads leves" gerenciadas pela biblioteca ZIO. Em vez de criar uma thread pesada do sistema, 
+uma fiber é uma tarefa assíncrona e cooperativa que a ZIO executa de forma eficiente.
+
+Onde se pode aplicar?
+
+Concorrência: Quando precisas executar múltiplas tarefas ao mesmo tempo sem bloquear a aplicação.
+Paralelismo: Realizar operações independentes em paralelo, como chamar várias APIs ao mesmo tempo.
+Cancelamento e Supervisão: Permitem cancelar operações ou reiniciar tarefas, úteis para tarefas de longa duração ou que podem falhar.
+Vantagens:
+
+Eficiência: Fibers são muito mais leves que threads do sistema, permitindo criar milhares sem sobrecarregar o ambiente.
+Controle: Permite cancelar, suspender ou reiniciar tarefas facilmente.
+Composição: Fibers podem ser combinadas (por exemplo, esperar por todas ou pela primeira a terminar), 
+facilitando o gerenciamento de fluxos concorrentes.
+Resiliência: Ajuda a isolar falhas, de forma que um erro numa fiber não necessariamente derruba a aplicação inteira.
+
+Exemplo Prático:
+Imagina que tens uma aplicação de monitoramento que precisa recolher dados de vários sensores ao mesmo tempo. 
+Em vez de criar uma thread para cada sensor, podes usar fibers para iniciar todas as operações de leitura de dados de forma assíncrona e 
+depois juntar os resultados sem bloquear a aplicação.
+
+Em resumo, as fibers são uma ferramenta poderosa para lidar com concorrência e paralelismo de forma eficiente e controlada, 
+mantendo a aplicação responsiva e resiliente.
+
+------------------------------------- !!!!!!!!!!! -------------------------------------------
+
+1. Fork, Await e Join
+Fork
+O que faz?
+O método fork inicia uma operação em paralelo, criando uma Fiber.
+Analogia no Trello:
+Imagine que precisas buscar, ao mesmo tempo, as tarefas de um quadro e as notificações do usuário. Usar fork é como mandar dois colaboradores ao mesmo tempo para buscar essas informações, sem esperar um terminar para iniciar o outro.
+Await e Join
+Await:
+O método await espera que uma Fiber termine e devolve um Exit – que é um valor que representa sucesso ou falha.
+
+Join:
+De forma mais comum, usamos join, que é uma forma de "esperar" a Fiber e extrair seu resultado.
+
+No código:
+
+def runOnAnotherThread_v2[R,E,A](zio: ZIO[R,E,A]) = for {
+  fib <- zio.fork
+  result <- fib.await
+} yield result match {
+  case Exit.Success(value) => s"succeed with $value"
+  case Exit.Failure(cause) => s"failed with $cause"
+}
+Aqui, uma operação é "despachada" para rodar em paralelo com fork e, em seguida, usamos await para obter o resultado quando a Fiber terminar.
+
+Analogia no Trello:
+É como enviar um colaborador buscar as tarefas; depois, você espera o colaborador voltar para ver se ele conseguiu (sucesso) ou se houve algum problema (falha).
+
+2. Poll
+O que faz?
+poll permite "espiar" o resultado de uma Fiber naquele exato momento, sem bloquear a execução. Se a Fiber ainda não terminou, ele devolve None.
+No código:
+
+val peaekFiber = for {
+  fib <- ZIO.attempt {
+    Thread.sleep(1000)
+    42
+  }.fork
+  result <- fib.poll
+} yield result
+Aqui, o código inicia uma Fiber que dorme 1 segundo e retorna 42. Em seguida, poll verifica se a Fiber já terminou. Se não, o resultado será None.
+Analogia no Trello:
+Imagine que queres saber se o colaborador já voltou com as tarefas, mas sem esperar – se ele ainda estiver a trabalhar, recebes uma indicação de que ele ainda não terminou.
+3. Composição de Fibers: zip e orElse
+Zip
+O que faz?
+O método zip combina duas Fibers, criando uma nova Fiber que, ao terminar, retorna uma tupla com os resultados dos dois efeitos.
+No código:
+scala
+Copy
+Edit
+val zippedFibers = for {
+  fib1 <- ZIO.succeed("Result from fiber 1").debugThread.fork
+  fib2 <- ZIO.succeed("Result from fiber 2").debugThread.fork
+  fiber = fib1.zip(fib2)
+  tuple <- fiber.join
+} yield tuple
+Aqui, duas Fibers são iniciadas em paralelo e, usando zip, o resultado final será uma tupla com os dois resultados.
+Analogia no Trello:
+É como mandar dois colaboradores buscar duas informações (por exemplo, tarefas e comentários) e, quando ambos retornarem, juntar os resultados para exibir na tela.
+orElse
+O que faz?
+O método orElse cria uma Fiber que, se a primeira falhar, retorna o resultado da segunda Fiber.
+No código:
+scala
+Copy
+Edit
+val chainedFibers = for {
+  fib1 <- ZIO.fail("no good").debugThread.fork
+  fib2 <- ZIO.succeed("Result from fiber 2").debugThread.fork
+  fiber = fib1.orElse(fib2)
+  message <- fiber.join
+} yield message
+Aqui, a Fiber fib1 falha, então orElse garante que o resultado final será o da fib2.
+Analogia no Trello:
+Imagine que envias um colaborador para buscar tarefas e ele falha (por exemplo, não encontra o quadro). Usando orElse, você imediatamente recorre a outro colaborador que traz as informações necessárias, garantindo que a operação não falhe.
+Vantagens e Quando Usar
+Paralelismo e Concorrência:
+Permite executar operações simultâneas sem bloquear o fluxo principal. Em um projeto Trello, por exemplo, você pode buscar dados de diferentes fontes (tarefas, comentários, notificações) ao mesmo tempo, acelerando o carregamento da interface.
+
+Composição e Flexibilidade:
+Com operadores como zip e orElse, você pode compor diferentes operações paralelas e definir estratégias de fallback (se uma operação falhar, use outra).
+
+Controle sobre a Execução:
+Métodos como await e join permitem que você controle quando e como esperar pelos resultados das operações em paralelo. O poll permite "espiar" sem bloquear.
+
+Resiliência:
+Se uma Fiber falhar, você pode usar orElse para garantir que a aplicação continue, fornecendo resultados alternativos. Isso é útil em sistemas críticos onde você não quer que uma falha parcial interrompa todo o fluxo (por exemplo, se buscar comentários falhar, ainda podes exibir as tarefas).
+
+Resumo Prático no Contexto Trello
+Imagine que, ao carregar um quadro no Trello, você precisa:
+
+Buscar as tarefas.
+Buscar os comentários das tarefas.
+Buscar as notificações do usuário.
+Você pode usar Fibers para executar essas operações em paralelo:
+
+fork inicia cada operação.
+join espera que cada operação termine e coleta os resultados.
+zip pode ser usado para combinar resultados de duas operações.
+orElse pode fornecer uma estratégia de fallback se uma operação falhar.
+Tudo isso torna a aplicação mais rápida, responsiva e resiliente, permitindo que o usuário tenha uma experiência mais fluida.
+
+
+------------------------------------------------------ !!!!!! ------------------------------------------------------------------
+
+
+O que são Parâmetros de Tipo?
+Eles são como variáveis genéricas para tipos de dados. Em vez de especificares um tipo fixo, usas letras para dizer que a função pode trabalhar com qualquer tipo.
+Por exemplo:
+
+scala
+Copy
+Edit
+def identidade[T](valor: T): T = valor
+Aqui, T pode ser qualquer tipo (String, Int, etc.).
+
+Analisando o Código:
+E, E1, E2, A, B são parâmetros de tipo:
+
+E → Tipo do erro final que a função pode devolver.
+E1 e E2 → Tipos dos erros individuais que os Fiber podem devolver.
+A → Tipo do valor devolvido pelo fiber1.
+B → Tipo do valor devolvido pelo fiber2.
+E1 <: E e E2 <: E
+
+Significa que E1 e E2 são "subtipos" de E.
+Em termos simples, os erros de fiber1 e fiber2 têm de ser compatíveis com o tipo de erro final E.
+1. zipFibersGeneral
+Esta função faz zip de dois Fiber, o que significa que:
+
+Executa os dois em paralelo.
+Espera que ambos terminem com sucesso.
+Depois junta os resultados num par (A, B).
+scala
+Copy
+Edit
+def zipFibersGeneral[E, E1 <: E, E2 <: E, A, B](
+  fiber1: Fiber[E1, A], 
+  fiber2: Fiber[E2, B]
+): ZIO[Any, Nothing, Fiber[E, (A, B)]] = {
+  
+  val finalEffect = for {
+    v1 <- fiber1.join  // Espera o fiber1 terminar e pega o resultado (A)
+    v2 <- fiber2.join  // Espera o fiber2 terminar e pega o resultado (B)
+  } yield (v1, v2)    // Junta os resultados num par (A, B)
+  
+  finalEffect.fork    // Cria um novo Fiber para este efeito combinado
+}
+Explicação passo a passo:
+fiber1.join e fiber2.join:
+Esperam que os fibers terminem.
+Se ambos forem bem-sucedidos, devolvem (A, B).
+Se qualquer um falhar, o erro é devolvido como E.
+.fork: Cria um novo Fiber para o efeito combinado.
+Resultado final: Um Fiber que devolve um par (A, B) se ambos os fibers originais tiverem sucesso.
+Quando Usar:
+Quando precisas executar duas tarefas em paralelo e juntar os resultados.
+Exemplo no Trello: Buscar dados do utilizador e tarefas ao mesmo tempo e só continuar quando ambos estiverem prontos.
+2. chainFibers
+Esta função faz um orElse:
+
+Tenta o primeiro Fiber.
+Se falhar, tenta o segundo Fiber.
+Se ambos falharem, devolve o erro do segundo.
+scala
+Copy
+Edit
+def chainFibers[E,A](
+  fiber1: Fiber[E,A], 
+  fiber2: Fiber[E,A]
+): ZIO[Any, Nothing, Fiber[E,A]] =
+  fiber1.join.orElse(fiber2.join).fork
+Explicação passo a passo:
+fiber1.join: Tenta obter o resultado do primeiro Fiber.
+.orElse(fiber2.join):
+Se o fiber1 falhar, tenta o fiber2.
+Se ambos falharem, devolve o erro do fiber2.
+.fork: Cria um novo Fiber para o efeito combinado.
+Resultado final: Um Fiber que devolve o valor do primeiro Fiber que tiver sucesso.
+Quando Usar:
+Quando tens duas formas alternativas de obter o mesmo resultado.
+Exemplo no Trello:
+Se não conseguir buscar as tarefas de um utilizador de uma base de dados, tenta buscá-las de um cache.
+Resumo Geral:
+zipFibersGeneral: Junta resultados de dois fibers em paralelo, falha se qualquer um falhar.
+chainFibers: Tenta o primeiro Fiber, e só tenta o segundo se o primeiro falhar.
+[E, E1 <: E, E2 <: E, A, B]:
+E: Tipo do erro final.
+E1 e E2: Erros dos fibers individuais (têm de ser subtipos de E).
+A e B: Tipos dos valores que os fibers devolvem.
