@@ -1,0 +1,87 @@
+O que são Effects em Scala?
+Effects são uma forma de representar ações que interagem com o mundo exterior (como ler um arquivo, 
+fazer uma requisição HTTP ou acessar uma base de dados) de forma pura e controlada. Em vez de executar essas ações imediatamente, 
+encapsulamos a operação num valor que descreve a ação a ser feita. Isso permite:
+
+Composição: Podemos combinar e transformar operações de forma declarativa.
+Testabilidade: Como a operação está descrita, podemos testar o código sem realmente executar efeitos colaterais.
+Controle de Erros: Podemos tratar erros de forma funcional, sem recorrer a exceções imperativas.
+Concorrência: Frameworks como ZIO permitem manipular operações assíncronas e concorrentes de forma mais segura.
+Como se fazem e quando usar?
+Em Scala, bibliotecas como ZIO ou cats-effect fornecem tipos como ZIO, IO, etc., para representar efeitos. Por exemplo:
+
+scala
+Copy
+Edit
+import zio._
+
+// Um efeito que retorna a hora atual
+val currentTime: UIO[Long] = ZIO.succeed(System.currentTimeMillis())
+
+// Um efeito que lê uma linha do console (só um exemplo)
+val readLine: Task[String] = ZIO.attempt(scala.io.StdIn.readLine())
+Quando usar:
+
+Acesso a I/O: Ler/escrever ficheiros, chamar APIs, interagir com bases de dados.
+Operações assíncronas e concorrentes: Combinar tarefas que podem ocorrer ao mesmo tempo.
+Tratamento de erros: Encapsular operações que podem falhar, tratando os erros de forma funcional.
+Vantagens:
+
+Pureza: Mantém o código funcional e previsível.
+Composição: Facilidade para combinar efeitos usando operadores como flatMap, map, zip, etc.
+Testabilidade: Facilita a simulação de efeitos para testes.
+Controle: Permite cancelar, reiniciar ou monitorar operações.
+Exemplo no contexto de um Trello
+Imagine um aplicativo tipo Trello onde precisamos:
+
+Criar uma tarefa.
+Atribuir a tarefa a um usuário.
+Enviar um email de notificação.
+Cada uma dessas ações interage com o mundo exterior (base de dados, serviço de email) e pode falhar.
+
+Código com Effects usando ZIO:
+
+scala
+Copy
+Edit
+import zio._
+
+case class Task(id: Int, description: String)
+case class User(id: Int, name: String)
+
+// Simula a criação da tarefa (por exemplo, inserção no banco de dados)
+def createTask(description: String): TaskIO[Task] =
+  ZIO.succeed(Task(1, description))
+
+// Simula a atribuição de uma tarefa a um usuário
+def assignTask(task: Task, user: User): TaskIO[Task] =
+  ZIO.succeed(task.copy(id = task.id)) // Apenas um exemplo
+
+// Simula o envio de um email de notificação
+def sendNotification(user: User, task: Task): TaskIO[Unit] =
+  ZIO.succeed(println(s"Email sent to ${user.name} about task ${task.description}"))
+
+// Compondo os efeitos:
+def subscribeTask(description: String, user: User): TaskIO[String] = for {
+  task      <- createTask(description)
+  assigned  <- assignTask(task, user)
+  _         <- sendNotification(user, assigned)
+} yield s"Tarefa '${assigned.description}' criada e atribuída a ${user.name}!"
+
+// Executando a operação (normalmente dentro de um ZIOAppDefault)
+object TrelloApp extends ZIOAppDefault {
+  def run = subscribeTask("Finalizar relatório", User(1, "Alice")).debug
+}
+Explicação:
+
+createTask: Um efeito que cria uma tarefa (sem efeitos colaterais visíveis, mas que pode interagir com um banco).
+assignTask: Um efeito que atribui a tarefa a um usuário.
+sendNotification: Um efeito que envia um email de notificação.
+subscribeTask: Combina os três efeitos sequencialmente usando um for-comprehension.
+Vantagens:
+Composição Declarativa: Não precisamos lidar com callbacks ou exceções imperativas.
+Testabilidade: Cada efeito pode ser testado isoladamente ou substituído por mocks.
+Concorrência/Cancelamento: Se necessário, podemos transformar esses efeitos em operações concorrentes ou canceláveis.
+Em resumo, Effects em Scala permitem escrever código que lida com operações do mundo real de forma funcional, 
+facilitando a composição, teste e manutenção do código. No exemplo do Trello, usamos efeitos para criar, 
+atribuir e notificar tarefas de forma clara e controlada.

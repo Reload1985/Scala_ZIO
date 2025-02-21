@@ -1,0 +1,304 @@
+O que são Fiber Interrupts em ZIO?
+Em ZIO, um Fiber Interrupt é uma forma de parar a execução de um Fiber 
+(uma "thread leve") antes que ele termine naturalmente. Isso é útil quando uma operação:
+
+Demora muito: Como uma chamada a uma API externa que não responde.
+Não é mais necessária: Como cancelar o carregamento de um painel no Trello quando o utilizador muda de página.
+Foi substituída por outra: Como atualizar uma tarefa que foi modificada noutro dispositivo.
+Como e Quando usar?
+Para interromper um Fiber em ZIO, usa-se o método .interrupt. Aqui vão os passos básicos:
+
+Cria-se o Fiber: Utilizando .fork para executar uma tarefa em segundo plano.
+Guarda-se a referência do Fiber: Para conseguir interrompê-lo mais tarde.
+Interrompe-se o Fiber: Utilizando .interrupt, o que faz com que o Fiber pare imediatamente (se for seguro parar).
+Quando usar:
+
+Requests demoradas: Como consultas longas à base de dados.
+Ações não necessárias: Como cancelar o envio de um email quando a tarefa é eliminada antes do envio.
+Concorrência controlada: Como garantir que apenas a última atualização de uma tarefa no Trello é processada.
+Vantagens:
+Eficiência: Evita gastar recursos com operações que já não são necessárias.
+Controle de fluxo: Permite cancelar operações em resposta a eventos (como um utilizador fechar um modal).
+Concorrência segura: Ajuda a gerir múltiplos processos que podem interferir uns com os outros.
+Exemplo no Trello
+Vamos imaginar um cenário no Trello:
+
+O utilizador abre um painel com várias tarefas.
+As tarefas são carregadas de um servidor remoto.
+Se o utilizador mudar de painel antes do carregamento terminar, 
+queremos cancelar o carregamento para não gastar recursos à toa.
+scala
+Copy
+Edit
+import zio._
+
+case class Task(id: Int, description: String)
+
+// Simula um carregamento lento de tarefas de um servidor
+def loadTasks(boardId: Int): TaskIO[List[Task]] = ZIO.attempt {
+  Thread.sleep(5000) // Simula uma espera longa (5 segundos)
+  List(Task(1, "Tarefa A"), Task(2, "Tarefa B"))
+}
+
+// Controla o carregamento das tarefas com possibilidade de interrupção
+def loadTasksWithInterrupt(boardId: Int): TaskIO[Unit] = for {
+  fiber <- loadTasks(boardId).debug("Tarefas carregadas:").fork // Inicia o Fiber
+  _     <- ZIO.sleep(2.seconds) *> fiber.interrupt              // Simula troca de painel e interrompe o Fiber
+  _     <- ZIO.succeed(println("O carregamento foi cancelado!"))
+} yield ()
+
+// Executando o código
+object TrelloApp extends ZIOAppDefault {
+  def run = loadTasksWithInterrupt(1)
+}
+O que acontece:
+
+loadTasks simula uma operação demorada (carregamento de tarefas).
+fork inicia o carregamento num Fiber (em segundo plano).
+Após 2 segundos, o Fiber é interrompido com .interrupt.
+A mensagem "O carregamento foi cancelado!" é exibida, 
+mostrando que o Fiber parou antes de terminar o Thread.sleep.
+Resumo:
+Fiber Interrupts permitem cancelar tarefas que não são mais necessárias.
+No exemplo do Trello, o carregamento de tarefas é cancelado quando o utilizador muda de painel.
+Vantagens: Economiza recursos, melhora a experiência do utilizador e controla concorrência de forma segura.
+Quando usar: Para cancelar operações demoradas, irrelevantes ou obsoletas em sistemas concorrentes.
+
+
+----------------------------------------------------------------------------------------------------------------
+
+Exemplo: Consulta à ArangoDB com Interruption (Timeout)
+Suponhamos que temos uma função que faz a query na base de dados Arango e que pode demorar. 
+Se ela demorar mais de, por exemplo, 3 segundos, queremos interromper a operação e 
+retornar uma mensagem de fallback, como "Operação cancelada: demora excessiva".
+
+scala
+Copy
+Edit
+import zio._
+import zio.durationInt
+
+// Modelos de dados
+case class Task(id: Int, description: String, assignedTo: String)
+case class ArangoConfig(dbName: String, password: String)
+
+// Simula uma conexão à base de dados ArangoDB
+object ArangoDB {
+  def getConnection(config: ArangoConfig): UIO[String] =
+    // Em um cenário real, aqui conectaríamos à base de dados usando o driver apropriado.
+    ZIO.succeed(s"Conexão estabelecida com ${config.dbName}")
+
+  // Simula uma query que pode demorar (por exemplo, buscar tarefas para um usuário)
+  def fetchTasks(conn: String, user: String): TaskIO[List[Task]] =
+    ZIO.attempt {
+      // Simulação de delay variável (podemos alterar para testar a interrupção)
+      Thread.sleep(5000) // 5 segundos de delay
+      // Simulação de resultado da query:
+      List(
+        Task(1, "Criar interface", "UserA"),
+        Task(2, "Revisar código", "UserC"),
+        Task(3, "Atualização de documentação", "UserA")
+      ).filter(_.assignedTo == user)
+    }
+    // Em um cenário real, trataríamos os erros de conexão/consulta
+    .orDie
+
+}
+
+// Alias para efeito que pode falhar com Throwable e retornar A
+type TaskIO[A] = ZIO[Any, Throwable, A]
+
+// Função que realiza a operação de consulta à ArangoDB com timeout e interruption
+def fetchUserTasksWithInterruption(user: String): TaskIO[String] = {
+  val config = ArangoConfig("task_db", "bla bla")
+  
+  // Criamos o efeito que obtém conexão e faz a consulta
+  val dbQuery = for {
+    conn  <- ArangoDB.getConnection(config) // Conexão à ArangoDB
+    tasks <- ArangoDB.fetchTasks(conn, user)  // Busca as tarefas do usuário
+  } yield tasks
+
+  // Executamos a query em um Fiber, e usamos timeout para interromper se demorar mais que 3 segundos
+  for {
+    fiber      <- dbQuery.fork
+    // Aguardamos até 3 segundos; se ultrapassar, o efeito falha com timeout
+    tasksOpt   <- fiber.join.timeoutFail(new Exception("Consulta cancelada: demora excessiva"))(3.seconds)
+    result     <- ZIO.succeed {
+                    if (tasksOpt.isEmpty) "Sem tarefas para o usuário"
+                    else s"Tarefas para $user: ${tasksOpt.map(_.description).mkString(", ")}"
+                  }
+  } yield result
+}
+
+// Aplicação ZIO que executa a operação e imprime o resultado
+object TrelloArangoApp extends ZIOAppDefault {
+  def run = fetchUserTasksWithInterruption("UserA").debug
+}
+Explicação do Código:
+Configuração e Conexão:
+
+Definimos ArangoConfig para representar as credenciais da base de dados (neste exemplo: "task_db" e "bla bla").
+A função ArangoDB.getConnection simula o estabelecimento de conexão com ArangoDB.
+Query Simulada:
+
+ArangoDB.fetchTasks simula uma consulta que busca as tarefas para um usuário específico. 
+Ela tem um Thread.sleep(5000), simulando um delay de 5 segundos.
+Uso de Fiber e Interruption (Timeout):
+
+Em fetchUserTasksWithInterruption, o efeito dbQuery (que conecta e consulta) é lançado numa Fiber usando .fork.
+Em seguida, usamos .join.timeoutFail(...) para esperar a conclusão da Fiber. 
+Se a Fiber demorar mais que 3 segundos, o efeito falha com uma exceção de timeout (isso aciona a interrupção).
+Caso a Fiber conclua dentro do tempo, obtemos as tarefas e formatamos uma mensagem de resposta.
+Resultado Final:
+
+Se a consulta for rápida (menos que 3 segundos), a mensagem exibe as tarefas do usuário.
+Se a consulta demorar (no nosso exemplo, 5 segundos), o efeito é interrompido e a exceção é gerada, 
+podendo ser tratada ou exibida.
+Execução da Aplicação:
+
+TrelloArangoApp é o aplicativo ZIO que executa o efeito e exibe o resultado com debug.
+Vantagens de Usar Interruption:
+Cancelamento de Operações Demoradas:
+Se a consulta à base de dados estiver demorando mais que o tempo aceitável, 
+a operação é interrompida, evitando que o sistema fique bloqueado.
+
+Recuperação Rápida:
+Permite retornar imediatamente uma mensagem de erro ou fallback, 
+melhorando a experiência do usuário (por exemplo, "Consulta cancelada: demora excessiva").
+
+Gerenciamento de Recursos:
+Interrompe operações que já não são necessárias, liberando recursos e evitando desperdício.
+
+Contexto no Trello:
+No contexto do Trello, se um usuário tentar carregar tarefas de um quadro usando ArangoDB
+ e a consulta demorar muito, a operação é interrompida
+  e o usuário recebe uma mensagem indicando que a consulta foi cancelada. 
+  Isso evita que a interface fique travada esperando por um resultado que não chegará rapidamente.
+
+Este exemplo ilustra como usar effects para lidar com I/O, 
+fibers para executar a operação de forma concorrente e interruption (via timeout)
+ para cancelar operações demoradas.
+
+
+--------------------------------------------------------------------------------------------------------------
+
+A seguir, um exemplo completo (simulado) que mostra como poderias implementar, 
+usando ZIO, uma query que busca tarefas em comum entre dois usuários (User A e User C) e, se não houver nenhuma, 
+retorna uma mensagem "sem tarefas em comum". Neste exemplo, usamos:
+
+Effects para representar operações com o banco de dados;
+Fibers para executar a query de forma concorrente (caso seja interessante, 
+por exemplo, se tivermos queries paralelas) e controlar o timeout;
+Interruption para cancelar a operação se demorar demasiado.
+Vou simular a conexão ao banco de dados e as operações de query.
+
+Código Completo com Explicação
+scala
+Copy
+Edit
+import zio._
+import zio.durationInt
+
+// Modelos de dados
+case class Task(id: Int, description: String, assignedTo: String)
+case class DBConnection()
+
+// Simulação de uma conexão à base de dados
+object Database {
+  // Simula obter uma conexão (efeito que nunca falha para simplificar)
+  def getConnection: UIO[DBConnection] =
+    ZIO.succeed(DBConnection())
+
+  // Simula uma query que busca tarefas atribuídas a um dado usuário
+  def fetchTasksForUser(conn: DBConnection, user: String): TaskIO[List[Task]] =
+    ZIO.attempt {
+      // Simulação: a base de dados contém estas tarefas
+      val allTasks = List(
+        Task(1, "Criar interface", "UserA"),
+        Task(2, "Corrigir bug", "UserB"),
+        Task(3, "Reunião com equipe", "UserC"),
+        Task(4, "Atualizar documentação", "UserA"),
+        Task(5, "Deploy na produção", "UserC")
+      )
+      // Filtra as tarefas atribuídas ao usuário
+      allTasks.filter(_.assignedTo == user)
+    }.orDie  // Para simplificar, não tratamos falhas aqui
+}
+
+// Alias para efeito que pode falhar com Throwable e retornar A
+type TaskIO[A] = ZIO[Any, Throwable, A]
+
+// Função que busca as tarefas de um usuário a partir de uma conexão de DB
+def getTasks(user: String): TaskIO[List[Task]] = for {
+  conn <- Database.getConnection
+  tasks <- Database.fetchTasksForUser(conn, user)
+} yield tasks
+
+// Função que busca as tarefas em comum entre dois usuários (UserA e UserC)
+def getCommonTasks(user1: String, user2: String): TaskIO[String] = {
+  // Executamos as duas queries em paralelo utilizando fibers
+  val fiberQuery = for {
+    fiber1 <- getTasks(user1).fork   // Buscar tarefas para UserA
+    fiber2 <- getTasks(user2).fork   // Buscar tarefas para UserC
+    // Aguardar os resultados com timeout: se demorar mais que 3 segundos, interrompe
+    tasks1 <- fiber1.join.timeoutFail(new Exception("Query timeout for " + user1))(3.seconds)
+    tasks2 <- fiber2.join.timeoutFail(new Exception("Query timeout for " + user2))(3.seconds)
+  } yield tasks1.intersect(tasks2) // Tarefas em comum usando intersect (simples comparação)
+
+  // Executa a query, tratando o caso sem tarefas em comum
+  fiberQuery.flatMap { commonTasks =>
+    if (commonTasks.isEmpty)
+      ZIO.succeed("sem tarefas em comum")
+    else
+      ZIO.succeed(s"Tarefas em comum: ${commonTasks.map(_.description).mkString(", ")}")
+  }
+  // Se necessário, podemos usar interruption para cancelar em caso de timeout
+  // ou se o usuário sair da página.
+  // Aqui, o timeout já interrompe a Fiber automaticamente.
+}
+
+// Exemplo de execução no contexto de um aplicativo ZIO (por exemplo, um serviço Trello)
+object TrelloApp extends ZIOAppDefault {
+  def run: URIO[Any, ExitCode] = {
+    // Imagina que estamos buscando tarefas comuns entre UserA e UserC
+    getCommonTasks("UserA", "UserC").debug("Resultado").exitCode
+  }
+}
+Explicação Passo a Passo:
+Modelos e Conexão à Base de Dados:
+
+Criamos um modelo simples Task e uma simulação de DBConnection.
+Em Database.getConnection, simulamos obter uma conexão de forma pura (efeito UIO).
+Em Database.fetchTasksForUser, simulamos uma query que filtra tarefas atribuídas a um dado usuário.
+Função getTasks:
+
+Usa os efeitos para obter a conexão e depois buscar tarefas para um usuário.
+Retorna um TaskIO[List[Task]].
+Função getCommonTasks:
+
+Lança duas queries em paralelo utilizando .fork para criar fibers:
+Uma busca tarefas para UserA e a outra para UserC.
+Usa .join para aguardar os resultados.
+Adiciona um timeout (timeoutFail) para interromper a Fiber se a operação demorar mais de 3 segundos.
+Calcula as tarefas em comum usando o método intersect da lista.
+Se o resultado for vazio, retorna "sem tarefas em comum"; caso contrário, 
+retorna uma mensagem com as descrições das tarefas.
+Interruption/Timeout:
+
+O uso de timeoutFail ilustra como interromper uma operação (via Fiber interrupt) se demorar demais, 
+cancelando a operação.
+Essa interrupção é útil, por exemplo, se o usuário fechar a janela ou se a query demorar mais que o esperado.
+Execução no TrelloApp:
+
+TrelloApp é o aplicativo ZIO que executa a função getCommonTasks e imprime o resultado no console.
+Vantagens e Quando Usar:
+Effects:
+Encapsulam a lógica de I/O (consulta ao banco) de forma pura e testável.
+Fibers:
+Permitem executar as queries de forma concorrente, diminuindo o tempo total.
+Interruption (via Timeout):
+Permite cancelar operações demoradas, melhorando a experiência do usuário.
+Composição Declarativa:
+Usamos for-comprehension para compor operações assíncronas de forma clara e legível.
+No contexto de um sistema tipo Trello, essa abordagem permite buscar dados (tarefas, comentários, notificações)
+ de forma eficiente e resiliente, respondendo rapidamente ao usuário e cancelando operações desnecessárias.
