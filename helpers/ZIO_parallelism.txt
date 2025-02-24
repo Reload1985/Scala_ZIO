@@ -1,0 +1,106 @@
+Paralelismo em Scala ZIO
+Paralelismo é a capacidade de executar várias operações ao mesmo tempo, usando os recursos disponíveis (como múltiplos núcleos de CPU) para acelerar o processamento. Em ZIO, isso significa que podes disparar vários efeitos (operações) simultaneamente e depois combinar os resultados, sem ter que esperar que um termine para iniciar o outro.
+
+Onde se Aplica
+Em um sistema tipo Trello, o paralelismo é útil para:
+
+Carregar dados de diferentes fontes simultaneamente: Por exemplo, buscar as tarefas, os comentários e as notificações de um quadro ao mesmo tempo.
+Processar atualizações em paralelo: Como calcular estatísticas de diferentes quadros ou listas.
+Melhorar a responsividade: Garantindo que a interface do usuário não fique bloqueada enquanto múltiplas operações são realizadas.
+Vantagens do Paralelismo com ZIO
+Velocidade: Ao executar operações em paralelo, o tempo total de resposta pode ser muito menor do que executá-las sequencialmente.
+Utilização Eficiente de Recursos: Permite tirar proveito de sistemas multicore, distribuindo a carga entre diferentes núcleos.
+Melhor Experiência do Usuário: Operações pesadas, como carregamento de dados, podem ser realizadas sem travar a aplicação.
+Como se Faz em ZIO
+ZIO fornece vários combinadores para executar efeitos em paralelo:
+
+zip e zipWith: Executam dois efeitos em paralelo e combinam seus resultados.
+foreachPar: Executa uma coleção de efeitos em paralelo.
+fork: Inicia um efeito em uma Fiber (thread leve) que pode rodar em paralelo.
+Exemplo Prático com Trello
+Imagine que tens um painel no Trello e precisas carregar, ao mesmo tempo:
+
+As tarefas do quadro.
+Os comentários das tarefas.
+As notificações do usuário.
+Aqui está um exemplo simples usando ZIO:
+
+scala
+Copy
+Edit
+import zio._
+import zio.durationInt
+
+// Modelos simples
+case class Task(id: Int, description: String)
+case class Comment(id: Int, text: String)
+case class Notification(message: String)
+
+// Simulações de operações que retornam efeitos ZIO
+def fetchTasks(boardId: Int): TaskIO[List[Task]] =
+  ZIO.succeed {
+    println("Carregando tarefas...")
+    Thread.sleep(1000) // Simula delay de 1 segundo
+    List(Task(1, "Criar interface"), Task(2, "Revisar código"))
+  }
+
+def fetchComments(boardId: Int): TaskIO[List[Comment]] =
+  ZIO.succeed {
+    println("Carregando comentários...")
+    Thread.sleep(1200) // Simula delay de 1.2 segundos
+    List(Comment(1, "Ótimo trabalho!"), Comment(2, "Precisamos ajustar isso"))
+  }
+
+def fetchNotifications(userId: Int): TaskIO[List[Notification]] =
+  ZIO.succeed {
+    println("Carregando notificações...")
+    Thread.sleep(800) // Simula delay de 0.8 segundos
+    List(Notification("Você tem 3 novas notificações"))
+  }
+
+// Alias para efeitos que podem falhar com Throwable
+type TaskIO[A] = ZIO[Any, Throwable, A]
+
+// Função que executa as operações em paralelo
+def loadDashboard(boardId: Int, userId: Int): TaskIO[String] = for {
+  // Inicia as operações em paralelo usando zip
+  tasksFiber         <- fetchTasks(boardId).fork
+  commentsFiber      <- fetchComments(boardId).fork
+  notificationsFiber <- fetchNotifications(userId).fork
+
+  // Aguarda que todas terminem (join)
+  tasks         <- tasksFiber.join
+  comments      <- commentsFiber.join
+  notifications <- notificationsFiber.join
+
+  result = s"Tarefas: ${tasks.map(_.description).mkString(", ")}\n" +
+           s"Comentários: ${comments.map(_.text).mkString(", ")}\n" +
+           s"Notificações: ${notifications.map(_.message).mkString(", ")}"
+} yield result
+
+// Aplicação ZIO que executa o dashboard e exibe o resultado
+object TrelloDashboardApp extends ZIOAppDefault {
+  def run: URIO[Any, ExitCode] =
+    loadDashboard(boardId = 1, userId = 1).debug.exitCode
+}
+Explicação do Exemplo
+Simulação de Delay:
+Cada função (fetchTasks, fetchComments, fetchNotifications) simula uma operação de I/O (por exemplo, consulta a um banco de dados) com Thread.sleep para simular o tempo de resposta.
+
+Uso de Fibers para Paralelismo:
+Com .fork, cada operação é iniciada em uma Fiber separada, permitindo que elas sejam executadas simultaneamente.
+
+Join para Reunir Resultados:
+Após iniciar as operações, usamos .join para esperar que cada Fiber conclua, reunindo os resultados.
+
+Composição Declarativa:
+A função loadDashboard combina os resultados e formata uma resposta, simulando o carregamento do painel do Trello.
+
+Resumo
+Paralelismo em ZIO permite executar várias operações simultaneamente, aumentando a eficiência e a responsividade da aplicação.
+Vantagens:
+Reduz o tempo total de execução.
+Melhor utilização de recursos.
+Aumenta a experiência do usuário em sistemas com múltiplas operações I/O.
+Exemplo no Trello:
+Carregar tarefas, comentários e notificações de forma concorrente, garantindo que o painel seja exibido rapidamente.
