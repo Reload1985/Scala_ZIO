@@ -1,0 +1,123 @@
+O que são Resources em ZIO?
+Em ZIO, Resources referem-se a qualquer coisa que precise ser adquirida (aberta) e depois libertada (fechada) de forma segura, como:
+
+Conexões a bases de dados
+Files (ficheiros) abertos para leitura/escrita
+Sockets de rede
+Qualquer recurso que precise de ser "limpo" após o uso
+O Problema que Resolve:
+No desenvolvimento de software, um problema comum é garantir que um recurso seja sempre libertado, mesmo que ocorra um erro no meio do processamento.
+Exemplo:
+
+Abrir uma conexão à base de dados e ocorrer uma exceção antes de a fechar. Isso pode levar a um leak de conexão.
+ZIO resolve este problema com:
+
+ZIO.acquireRelease: Adquire um recurso e garante a sua libertação.
+ZIO.acquireReleaseWith: Igual ao acima, mas permite devolver um valor enquanto ainda garante a libertação do recurso.
+Como Funciona?
+1. ZIO.acquireRelease
+Sintaxe:
+
+scala
+Copy
+Edit
+ZIO.acquireRelease(acquire)(release)
+acquire: Efeito para adquirir o recurso (ex.: abrir conexão à DB)
+release: Efeito para libertar o recurso (ex.: fechar conexão)
+Garante que o release sempre será executado, mesmo que ocorra um erro.
+
+2. ZIO.acquireReleaseWith
+Sintaxe:
+
+scala
+Copy
+Edit
+ZIO.acquireReleaseWith(acquire)(release)(use)
+acquire: Efeito para adquirir o recurso.
+release: Efeito para libertar o recurso.
+use: Efeito que usa o recurso para fazer algo (ex.: query à DB).
+Este devolve o valor resultante do use.
+
+Exemplo no Contexto do Trello
+Vamos imaginar uma funcionalidade para o Trello:
+"Obter as tarefas em comum entre dois utilizadores (A e C)"
+
+Conectar à base de dados (acquire)
+Fazer a query (use)
+Fechar a conexão (release)
+Código Completo:
+scala
+Copy
+Edit
+import zio._
+import zio.Console._
+
+object TrelloResourceExample extends ZIOAppDefault {
+
+  // Função para abrir conexão à DB (acquire)
+  def openDbConnection: UIO[String] =
+    ZIO.succeed("DB Connection Opened").debugThread
+
+  // Função para fechar conexão à DB (release)
+  def closeDbConnection(conn: String): UIO[Unit] =
+    ZIO.succeed(s"Closing $conn").debugThread.unit
+
+  // Função para fazer a query (use)
+  def fetchCommonTasks(userA: String, userC: String): ZIO[String, Nothing, List[String]] =
+    ZIO.succeed {
+      // Simula uma query que procura tarefas em comum entre User A e C
+      val tasksUserA = List("Task 1", "Task 2", "Task 3")
+      val tasksUserC = List("Task 2", "Task 3", "Task 4")
+      tasksUserA.intersect(tasksUserC)
+    }.debugThread
+
+  // Função que usa acquireRelease
+  def getCommonTasks(userA: String, userC: String): ZIO[Any, Nothing, List[String]] = 
+    ZIO.acquireRelease(openDbConnection)(closeDbConnection) { conn =>
+      fetchCommonTasks(userA, userC)
+    }
+
+  // Função que usa acquireReleaseWith
+  def getCommonTasksWithMessage(userA: String, userC: String): ZIO[Any, Nothing, String] =
+    ZIO.acquireReleaseWith(openDbConnection)(closeDbConnection) { conn =>
+      fetchCommonTasks(userA, userC).map { tasks =>
+        if (tasks.isEmpty) s"No common tasks for $userA and $userC"
+        else s"Common tasks for $userA and $userC: ${tasks.mkString(", ")}"
+      }
+    }
+
+  def run = for {
+    _ <- getCommonTasks("A", "C").flatMap(tasks => printLine(s"Common tasks: $tasks"))
+    _ <- getCommonTasksWithMessage("A", "C").flatMap(msg => printLine(msg))
+  } yield ()
+}
+Explicação:
+openDbConnection: Simula abrir uma conexão à DB.
+closeDbConnection: Simula fechar a conexão.
+fetchCommonTasks: Faz uma query (simulada) que encontra tarefas em comum entre os utilizadores A e C.
+getCommonTasks: Usa acquireRelease para garantir que:
+Abre a conexão.
+Executa a query.
+Garante que a conexão é fechada, mesmo em caso de erro.
+getCommonTasksWithMessage: Usa acquireReleaseWith para:
+Fazer o mesmo que getCommonTasks, mas devolve uma mensagem com os resultados.
+Se não houver tarefas em comum, devolve "No common tasks".
+Caso contrário, lista as tarefas em comum.
+Quando Usar e Vantagens:
+Quando usar:
+
+Sempre que um recurso precise de ser adquirido e garantidamente libertado.
+Ex.: Conexões a DB, ficheiros abertos, sockets de rede.
+Vantagens:
+
+Evita resource leaks (ex.: conexões abertas indevidamente).
+Segurança: Garante que o release será sempre executado, mesmo que ocorra um erro.
+Código Limpo e Legível: Centraliza a lógica de aquisição e libertação de recursos.
+Resumo Prático:
+ZIO.acquireRelease e acquireReleaseWith são usados para:
+Garantir que um recurso é sempre libertado.
+Proteger contra leaks em caso de erro.
+No Trello:
+Abrir conexão à base de dados para buscar tarefas.
+Garantir que a conexão é fechada mesmo que a query falhe.
+O uso de acquireReleaseWith permite retornar mensagens personalizadas com os resultados.
