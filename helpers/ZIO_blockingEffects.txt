@@ -1,0 +1,34 @@
+Blocking Effects em Scala ZIO
+
+O que são:
+Blocking Effects referem-se a operações que travam (bloqueiam) a execução da thread até que sejam concluídas. Exemplos comuns incluem operações de I/O, como leitura/escrita em ficheiros, consultas em bases de dados ou chamadas a APIs externas.
+Como Scala ZIO é assíncrono e não bloqueante por padrão, ele trata esses efeitos em pools de threads especiais para evitar que as threads principais sejam travadas.
+Vantagens:
+Desempenho: Mantém as threads principais livres para continuar outras tarefas, melhorando a eficiência e o desempenho da aplicação.
+Escalabilidade: Permite lidar com um grande número de requisições simultâneas sem esgotar as threads disponíveis.
+Como e Quando Usar:
+Sempre que tiveres uma operação que pode demorar (como ler de um ficheiro grande, fazer chamadas a APIs lentas ou consultas complexas numa base de dados), é uma boa prática usares blocking effects.
+Usa ZIO.blocking ou ZIO.attemptBlocking para mover o efeito bloqueante para um pool de threads dedicado.
+Exemplo com Trello:
+Imagina que no Trello queres gerar um relatório em PDF com as tarefas de um utilizador. A geração de PDF é uma operação bloqueante (pode demorar um pouco). Para não bloquear outras operações da aplicação:
+
+scala
+Copy
+Edit
+def generateTaskReport(userId: String): Task[File] = {
+  ZIO.blocking {
+    ZIO.attempt {
+      // Código para gerar o PDF (operação bloqueante)
+      val report = new File(s"report_$userId.pdf")
+      val writer = new PrintWriter(report)
+      writer.write(s"Relatório de Tarefas do Utilizador: $userId")
+      writer.close()
+      report
+    }
+  }
+}
+Neste exemplo:
+
+ZIO.blocking coloca a operação num pool de threads para efeitos bloqueantes.
+ZIO.attempt lida com exceções de forma segura.
+Este padrão ajuda a aplicação a continuar a funcionar normalmente enquanto o relatório é gerado em segundo plano.

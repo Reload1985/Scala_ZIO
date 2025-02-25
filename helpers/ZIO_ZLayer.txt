@@ -10,9 +10,7 @@ Em vez de instanciar manualmente os objetos e passar para outras classes, o ZLay
 ✅ Evita código confuso e repetitivo
 
 📌 Explicação do código
-scala
-Copy
-Edit
+
 val connectionPoolLayer: ZLayer[Any, Nothing, ConnectionPool] = 
   ZLayer.succeed(ConnectionPool.create(10))
 Cria uma instância de ConnectionPool e transforma num ZLayer.
@@ -21,9 +19,7 @@ Nothing: Não pode falhar.
 ConnectionPool: O que esse layer fornece.
 📌 Isso significa que qualquer outro serviço que precisar de um ConnectionPool pode pegar esse ZLayer automaticamente!
 
-scala
-Copy
-Edit
+
 val databaseLayer: ZLayer[ConnectionPool, Nothing, UserDataBase] = 
   ZLayer.fromFunction(UserDataBase.create _)
 Cria um ZLayer para UserDataBase, mas…
@@ -31,16 +27,12 @@ Cria um ZLayer para UserDataBase, mas…
 Quando usado, o ZIO automaticamente pega o ConnectionPoolLayer e injeta no UserDataBase.create.
 📌 Se tivesses um banco de dados diferente, poderias trocar a implementação sem mudar o resto do código.
 
-scala
-Copy
-Edit
+
 val emailServiceLayer = ZLayer.succeed(EmailService.create())
 Cria um ZLayer para EmailService.
 ✅ Não depende de nada (Any) e não pode falhar (Nothing).
 📌 Poderia ser substituído facilmente por um mock em testes.
-scala
-Copy
-Edit
+
 val userSubscriptionServiceLayer = ZLayer.fromFunction(UserSubscrition.create _)
 Cria um ZLayer para UserSubscrition.
 ⚠️ Depende de EmailService e UserDataBase.
@@ -50,17 +42,13 @@ Com ZLayer, podes montar todas as dependências automaticamente, sem precisar fa
 
 Exemplo:
 
-scala
-Copy
-Edit
+
 val fullLayer = connectionPoolLayer ++ databaseLayer ++ emailServiceLayer ++ userSubscriptionServiceLayer
 🚀 Isso automaticamente conecta todos os serviços.
 Ordem importa! Se UserDataBase depende de ConnectionPool, o ConnectionPool precisa vir primeiro.
 Agora, qualquer código que precisar de UserSubscrition pode simplesmente fazer:
 
-scala
-Copy
-Edit
+
 ZIO.serviceWithZIO[UserSubscrition](_.subscribeUser(user))
 📌 O ZIO já sabe onde buscar as dependências e injeta automaticamente!
 
@@ -89,36 +77,28 @@ Neste código, estás a compor ZLayers de diferentes formas para criar um sistem
 Cada ZLayer representa um serviço que pode ser usado no sistema.
 
 1️⃣ Criando a conexão com o banco
-scala
-Copy
-Edit
+
 val connectionPoolLayer: ZLayer[Any, Nothing, ConnectionPool] = 
   ZLayer.succeed(ConnectionPool.create(10))
 Não depende de nada (Any)
 Não pode falhar (Nothing)
 Fornece um ConnectionPool
 2️⃣ Criando o banco de dados
-scala
-Copy
-Edit
+
 val databaseLayer: ZLayer[ConnectionPool, Nothing, UserDataBase] = 
   ZLayer.fromFunction(UserDataBase.create _)
 Depende de ConnectionPool (porque UserDataBase precisa de uma conexão).
 Não pode falhar (Nothing)
 Fornece um UserDataBase
 3️⃣ Criando o serviço de email
-scala
-Copy
-Edit
+
 val emailServiceLayer: ZLayer[Any, Nothing, EmailService] = 
   ZLayer.succeed(EmailService.create())
 Não depende de nada (Any)
 Não pode falhar (Nothing)
 Fornece um EmailService
 4️⃣ Criando o serviço de subscrição
-scala
-Copy
-Edit
+
 val userSubscriptionServiceLayer: ZLayer[UserDataBase with EmailService, Nothing, UserSubscrition] = 
   ZLayer.fromFunction(UserSubscrition.create _)
 Depende de UserDataBase e EmailService
@@ -130,9 +110,7 @@ Agora que criaste os layers individuais, precisas combiná-los corretamente.
 🔹 Passo 2: Compor Verticalmente (>>>)
 Vertical composition (>>>) pega um output e transforma no input do próximo layer.
 
-scala
-Copy
-Edit
+
 val databaseLayerFull: ZLayer[Any, Nothing, UserDataBase] = 
   connectionPoolLayer >>> databaseLayer
 ✅ O que acontece aqui?
@@ -145,9 +123,7 @@ connectionPoolLayer fornece ConnectionPool.
 🔹 Passo 3: Compor Horizontalmente (++)
 Horizontal composition (++) combina vários layers diferentes, criando um novo layer que contém ambos.
 
-scala
-Copy
-Edit
+
 val subscriptionRequirementsLayer: ZLayer[Any, Nothing, UserDataBase with EmailService] =
   databaseLayerFull ++ emailServiceLayer
 ✅ O que acontece aqui?
@@ -160,9 +136,7 @@ emailServiceLayer fornece EmailService.
 🔹 Passo 4: Criar o Serviço de Subscrição
 Agora que já temos todas as dependências (UserDataBase + EmailService), podemos criar o UserSubscrition:
 
-scala
-Copy
-Edit
+
 val userSubscritionLayer: ZLayer[Any, Nothing, UserSubscrition] =
   subscriptionRequirementsLayer >>> userSubscriptionServiceLayer
 ✅ O que acontece aqui?
