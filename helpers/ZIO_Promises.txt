@@ -1,0 +1,80 @@
+O que são Promises em ZIO?
+Um Promise em ZIO é como uma promessa de entregar um valor mais tarde.
+Imagina que encomendaste uma pizza:
+
+O restaurante promete que a pizza vai chegar (mas ainda não chegou).
+Enquanto esperas, podes fazer outras coisas (não precisas ficar parado na porta).
+Quando a pizza chegar, tens a tua promessa cumprida e podes finalmente comer.
+Em ZIO:
+
+Um Promise é um contenedor que vai guardar um valor assim que ele estiver pronto.
+Enquanto o valor não chega, outros efeitos podem continuar a correr.
+Quando usar Promises?
+Quando uma Fiber precisa de esperar por um valor que outra Fiber vai calcular.
+Para coordenação entre várias tarefas assíncronas.
+Quando precisas garantir que algo acontece numa ordem específica.
+Funções/Métodos mais usados:
+Promise.make[E, A] → Cria um Promise que vai guardar um valor do tipo A ou falhar com um erro do tipo E.
+promise.succeed(value) → Cumpre a promessa, guardando o valor.
+promise.fail(error) → Falha a promessa com um erro.
+promise.await → Espera pelo valor guardado no Promise.
+promise.isDone → Verifica se o Promise já foi cumprido.
+Exemplo no Trello:
+Imagina que tens um quadro partilhado e queres mover um cartão quando 2 utilizadores confirmarem a ação:
+
+O User A clica em "Mover".
+O User B também clica em "Mover".
+O cartão só vai ser movido quando ambos confirmarem.
+Aqui, um Promise faz total sentido:
+
+Promise vai esperar pelas confirmações.
+Quando ambas as confirmações chegarem, a ação é realizada.
+Código em Scala ZIO:
+scala
+Copy
+Edit
+object TrelloMoveCard extends ZIOAppDefault {
+  // 1. Cria um Promise para esperar pelas confirmações
+  val promise = Promise.make[Nothing, String]
+
+  // 2. Fiber do User A
+  val userA = for {
+    _ <- ZIO.succeed("User A confirmou!").debugThread
+    _ <- ZIO.sleep(1.second) // Simula tempo de resposta do User A
+    _ <- promise.succeed("Confirmado") // User A cumpre a promessa
+  } yield ()
+
+  // 3. Fiber do User B
+  val userB = for {
+    _ <- ZIO.succeed("User B confirmou!").debugThread
+    _ <- ZIO.sleep(2.seconds) // Simula tempo de resposta do User B
+    _ <- promise.succeed("Confirmado") // User B cumpre a promessa
+  } yield ()
+
+  // 4. Fiber que espera pelas confirmações
+  val moveCard = for {
+    _ <- ZIO.succeed("A aguardar confirmações...").debugThread
+    _ <- promise.await // Espera pelo valor do Promise
+    _ <- ZIO.succeed("Ambos confirmaram! A mover o cartão...").debugThread
+  } yield ()
+
+  def run = (userA zipPar userB zipPar moveCard).unit
+}
+Explicação do Código:
+Promise.make[Nothing, String] → Cria um Promise que vai guardar uma String (neste caso, "Confirmado").
+userA e userB → São Fibers que representam os 2 utilizadores.
+Ambos chamam .succeed("Confirmado") para cumprir a promessa quando confirmam a ação.
+moveCard → Espera pelas confirmações com .await.
+Só avança quando o Promise for cumprido.
+zipPar → Corre todas as Fibers em paralelo.
+A ação só acontece depois de ambos confirmarem.
+Vantagens:
+Coordenação simples entre várias tarefas assíncronas.
+Evita callbacks complicados, mantendo o código limpo e organizado.
+Garante a ordem correta de execução (no exemplo, só move o cartão quando ambos confirmarem).
+Resumindo:
+Promise é uma promessa de entregar um valor no futuro.
+Usa-se quando várias tarefas dependem de um valor que não está pronto ainda.
+Permite coordenação e sincronização fácil em ambientes concorrentes.
+.succeed(), .fail(), e .await() são os métodos mais importantes.
+Com Promises em ZIO, consegues controlar facilmente a ordem e dependência das tarefas!

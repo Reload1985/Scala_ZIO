@@ -1,0 +1,119 @@
+Asynchronous Effects em Scala ZIO
+No ZIO, Asynchronous Effects permitem lidar com operações que não acontecem imediatamente, como:
+
+Fazer um pedido a uma API.
+Ler dados de uma base de dados.
+Esperar pela resposta de um utilizador.
+Estas operações não são instantâneas, porque dependem de fatores externos (ex.: tempo de resposta do servidor).
+
+Porquê usar Asynchronous Effects?
+Para não bloquear a aplicação enquanto espera a resposta.
+Para melhorar o desempenho, permitindo que o programa faça outras coisas enquanto espera.
+Para escalar facilmente, gerindo várias operações ao mesmo tempo (paralelismo).
+Exemplo com Trello:
+Imagina que tens um Trello e queres carregar as tarefas de um utilizador. Para isso, fazes um pedido à base de dados ou a uma API.
+Esta operação é assíncrona, pois depende do tempo de resposta do servidor.
+
+Funções/Métodos mais usados:
+ZIO.async: Para integrar código assíncrono (ex.: callbacks) em ZIO.
+ZIO.fromFuture: Para converter um Future do Scala em um ZIO.
+ZIO.attemptBlocking: Para operações bloqueantes, como ler um ficheiro.
+ZIO.sleep: Para simular um tempo de espera.
+Exemplo com ZIO.async
+Imagina que queres carregar tarefas do utilizador através de uma API.
+
+
+def loadTasksFromAPI(userId: String): Task[List[String]] = {
+  ZIO.async { callback =>
+    // Imagina que isto é um pedido HTTP (simulação)
+    println(s"[API] A carregar tarefas para o utilizador $userId...")
+    Thread.sleep(2000) // Simula o tempo de espera da API
+    val tasks = List("Tarefa 1", "Tarefa 2", "Tarefa 3")
+    callback(ZIO.succeed(tasks))
+  }
+}
+Explicação:
+
+ZIO.async: Converte uma operação assíncrona num efeito ZIO.
+callback: Usado para "devolver" o resultado quando estiver pronto.
+Thread.sleep(2000): Simula o tempo de espera da API (2 segundos).
+ZIO.succeed(tasks): Devolve a lista de tarefas quando a API responder.
+Exemplo com ZIO.fromFuture
+Se já tiveres um Future em Scala, podes convertê-lo para ZIO assim:
+
+scala
+Copy
+Edit
+def loadTasksFuture(userId: String): Task[List[String]] = {
+  val futureTasks = Future {
+    println(s"[API] A carregar tarefas para o utilizador $userId...")
+    Thread.sleep(2000) // Simula o tempo de espera da API
+    List("Tarefa 1", "Tarefa 2", "Tarefa 3")
+  }
+  ZIO.fromFuture(_ => futureTasks)
+}
+Explicação:
+
+Future: Em Scala, é uma maneira comum de lidar com operações assíncronas.
+ZIO.fromFuture: Converte um Future para um efeito ZIO.
+Exemplo Completo com Trello:
+Vamos agora juntar tudo num exemplo mais completo:
+
+Carregar tarefas de dois utilizadores em paralelo.
+Mostrar as tarefas em comum (ou indicar que não há).
+scala
+Copy
+Edit
+def loadTasksFromAPI(userId: String): Task[List[String]] = {
+  ZIO.async { callback =>
+    println(s"[API] A carregar tarefas para o utilizador $userId...")
+    Thread.sleep(2000)
+    val tasks = userId match {
+      case "A" => List("Tarefa 1", "Tarefa 2", "Tarefa 3")
+      case "C" => List("Tarefa 2", "Tarefa 3", "Tarefa 4")
+      case _ => List()
+    }
+    callback(ZIO.succeed(tasks))
+  }
+}
+
+def findCommonTasks(userA: String, userC: String): Task[String] = {
+  for {
+    tasksA <- loadTasksFromAPI(userA).fork
+    tasksC <- loadTasksFromAPI(userC).fork
+    listA <- tasksA.join
+    listC <- tasksC.join
+    common = listA.intersect(listC)
+    result = if (common.isEmpty) "Sem tarefas em comum" else s"Tarefas em comum: ${common.mkString(", ")}"
+  } yield result
+}
+
+val program = findCommonTasks("A", "C").debugThread
+
+object TrelloApp extends ZIOAppDefault {
+  def run = program
+}
+Explicação:
+loadTasksFromAPI:
+
+Simula um pedido à API para carregar as tarefas.
+Usa ZIO.async para representar a espera pela resposta.
+findCommonTasks:
+
+Carrega as tarefas dos utilizadores A e C em paralelo usando .fork.
+Usa .join para esperar o resultado de ambas as fibras.
+Compara as listas para encontrar as tarefas em comum.
+Se não houver tarefas em comum, devolve "Sem tarefas em comum".
+.fork e .join:
+
+.fork: Inicia a operação numa nova fibra (thread leve).
+.join: Espera pelo resultado da fibra.
+Vantagens de Asynchronous Effects:
+Desempenho: Permitem que outras operações continuem enquanto se espera a resposta de um pedido assíncrono.
+Escalabilidade: Facilitam a gestão de múltiplas operações ao mesmo tempo.
+Eficiência de Recursos: Evitam bloquear threads enquanto aguardam respostas, o que é especialmente útil em sistemas com muitos utilizadores (como o Trello).
+Quando usar Asynchronous Effects?
+Quando precisas de esperar por respostas externas (API, base de dados, ficheiros).
+Para executar várias operações em paralelo, como carregar tarefas de múltiplos utilizadores.
+Quando queres melhorar o desempenho e a experiência do utilizador, evitando bloqueios.
+No contexto do Trello, isto é muito útil para carregar listas de tarefas, atualizar o estado de tarefas em tempo real ou sincronizar dados com o servidor sem bloquear a aplicação.

@@ -1,0 +1,121 @@
+Schedules em Scala ZIO
+No ZIO, Schedules são usados para:
+
+Repetir uma operação várias vezes.
+Retentar uma operação após falha (ex.: um pedido de rede falhou e queres tentar de novo).
+Aguardar entre tentativas com intervalos definidos.
+Eles permitem programar a repetição ou retentativa de efeitos de forma poderosa e flexível.
+
+Porquê usar Schedules?
+Resiliência: Ao lidar com falhas temporárias (ex.: falha de rede), podes tentar novamente em vez de falhar de imediato.
+Automatização: Automatiza a repetição de tarefas (ex.: sincronizar dados a cada hora).
+Eficiência: Controla intervalos entre tentativas para não sobrecarregar o sistema.
+Exemplo com Trello:
+Imagina que no Trello precisas:
+
+Sincronizar tarefas com o servidor a cada 5 minutos.
+Tentar novamente um pedido à API quando falha (ex.: problema temporário na rede).
+Funções/Métodos mais usados:
+Schedule.fixed(intervalo): Repete a operação a cada intervalo de tempo fixo.
+Schedule.recurs(n): Repete a operação n vezes.
+Schedule.exponential(base): Espera um tempo crescente (exponencial) entre tentativas.
+Schedule.spaced(intervalo): Espera um intervalo entre cada repetição.
+retry(schedule): Para retentar operações que falharam.
+repeat(schedule): Para repetir operações com sucesso.
+1. Exemplo: Sincronizar Tarefas a Cada 5 Minutos
+No Trello, imagina que queres sincronizar as tarefas com o servidor a cada 5 minutos.
+
+scala
+Copy
+Edit
+val syncTasks: UIO[Unit] = ZIO.succeed(println("Sincronizando tarefas com o servidor..."))
+
+val scheduledSync = syncTasks.repeat(Schedule.fixed(5.minutes))
+
+object TrelloSyncApp extends ZIOAppDefault {
+  def run = scheduledSync
+}
+Explicação:
+
+syncTasks: Representa a operação de sincronização (aqui só imprime no ecrã).
+.repeat(Schedule.fixed(5.minutes)): Repete a operação a cada 5 minutos.
+Isto é útil para manter as tarefas atualizadas em tempo real.
+2. Exemplo: Retentar Pedido à API em Caso de Falha
+Imagina que fazes um pedido à API para carregar tarefas, mas pode falhar por problemas temporários na rede.
+Queres tentar novamente até 3 vezes antes de desistir.
+
+scala
+Copy
+Edit
+def loadTasksFromAPI(userId: String): Task[List[String]] = {
+  ZIO.succeed {
+    println(s"[API] A carregar tarefas para o utilizador $userId...")
+    if (scala.util.Random.nextBoolean()) List("Tarefa 1", "Tarefa 2")
+    else throw new RuntimeException("Falha na API!")
+  }
+}
+
+val retryPolicy = Schedule.recurs(3)
+
+val loadWithRetry = loadTasksFromAPI("A").retry(retryPolicy).catchAll { _ =>
+  ZIO.succeed(List("Sem tarefas disponíveis"))
+}
+
+object TrelloRetryApp extends ZIOAppDefault {
+  def run = loadWithRetry.debugThread
+}
+Explicação:
+
+loadTasksFromAPI: Simula um pedido à API que pode falhar.
+Schedule.recurs(3): Tenta novamente até 3 vezes.
+.retry(retryPolicy): Aplica o retry com a política definida.
+.catchAll: Se falhar 3 vezes, devolve "Sem tarefas disponíveis".
+3. Exemplo: Tentativa Exponencial
+Imagina que queres tentar novamente um pedido à API, mas não queres sobrecarregar o servidor.
+Podes esperar um tempo exponencialmente maior entre tentativas: 1s, 2s, 4s, 8s...
+
+scala
+Copy
+Edit
+val retryExponential = Schedule.exponential(1.second) && Schedule.recurs(5)
+
+val loadWithExponentialRetry = loadTasksFromAPI("A").retry(retryExponential)
+
+object TrelloExponentialRetryApp extends ZIOAppDefault {
+  def run = loadWithExponentialRetry.debugThread
+}
+Explicação:
+
+Schedule.exponential(1.second): Espera 1s, 2s, 4s, 8s, ... entre tentativas.
+Schedule.recurs(5): Máximo de 5 tentativas.
+&&: Combina as políticas para tentar até 5 vezes com espera exponencial.
+4. Exemplo: Repetição com Intervalos (spaced)
+No Trello, podes querer verificar novas notificações a cada 10 segundos.
+
+scala
+Copy
+Edit
+val checkNotifications: UIO[Unit] = ZIO.succeed(println("A verificar novas notificações..."))
+
+val scheduledCheck = checkNotifications.repeat(Schedule.spaced(10.seconds))
+
+object TrelloNotificationsApp extends ZIOAppDefault {
+  def run = scheduledCheck
+}
+Explicação:
+
+.repeat(Schedule.spaced(10.seconds)): Repete a operação a cada 10 segundos.
+Ideal para atualizações frequentes sem sobrecarregar o sistema.
+Quando usar Schedules?
+Para tentar novamente pedidos que podem falhar temporariamente (ex.: rede).
+Para repetir operações automaticamente (ex.: sincronizações, verificações de notificações).
+Para controlar o fluxo de pedidos (ex.: evitar sobrecarga em APIs).
+Vantagens de Schedules:
+Resiliência: Assegura que a aplicação lida melhor com falhas temporárias.
+Escalabilidade: Evita sobrecarregar sistemas externos com tentativas agressivas.
+Eficiência: Garante que as operações são repetidas no tempo certo, evitando esperas desnecessárias.
+Resumo:
+Schedules em ZIO ajudam a repetir ou retentar operações de forma organizada e eficiente.
+São ideais para sincronizações automáticas, retentativas de rede e verificações periódicas.
+No contexto do Trello, ajudam a manter as tarefas sincronizadas, a lidar com falhas de rede e a verificar novas notificações em intervalos definidos.
+Estes exemplos mostram como automatizar tarefas comuns enquanto manténs um controlo preciso sobre quando e como as operações são feitas.

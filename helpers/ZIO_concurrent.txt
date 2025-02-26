@@ -1,0 +1,98 @@
+collectAllParDiscard em ZIO
+collectAllParDiscard é um método em ZIO que:
+Executa múltiplos efeitos em paralelo (concorrência).
+Descarta os resultados de cada efeito.
+Retorna apenas um UIO[Unit] (ou seja, não interessa o valor devolvido).
+Útil quando queres apenas que os efeitos sejam executados, mas não precisas dos resultados.
+Exemplo com Trello:
+Imagina que queres atualizar o status de várias tarefas em paralelo, mas não precisas de saber o novo status.
+
+scala
+Copy
+Edit
+val tasks = List(1, 2, 3, 4) // IDs das tarefas
+
+val updateEffects = tasks.map(id => 
+  ZIO.succeed(println(s"Atualizando status da tarefa $id"))
+)
+
+val updateAll = ZIO.collectAllParDiscard(updateEffects)
+map cria um efeito para cada ID de tarefa.
+collectAllParDiscard corre todos os efeitos em paralelo e descarta os resultados.
+Aqui só precisas que o status seja atualizado, não interessa o retorno.
+Quando usar collectAllParDiscard?
+Quando queres executar efeitos paralelamente mas não precisas dos resultados.
+Exemplo:
+Notificações enviadas para múltiplos utilizadores.
+Logging em batch.
+Operações de atualização em massa onde não precisas verificar o valor retornado.
+Atomic References (Refs Atómicas) em ZIO
+Em ZIO, Refs são variáveis mutáveis seguras para concorrência.
+
+Mas quando falamos em Atomic References (Ref em ZIO), referimo-nos a:
+Referências atómicas que garantem consistência mesmo em programas concorrentes.
+Usam operações atómicas para leitura e escrita seguras.
+Internamente utilizam CAS (Compare And Swap) para garantir que as alterações são aplicadas corretamente.
+O que é Atomic?
+Atomic significa que uma operação é feita de forma indivisível.
+Ou seja, ninguém pode ler ou alterar o valor enquanto está a ser atualizado.
+Isso evita condições de corrida (race conditions) em programas concorrentes.
+Porquê usar Atomic References?
+Para coordenar estados partilhados entre várias fibers (ou threads).
+Garantir consistência de dados em programas assíncronos e concorrentes.
+Quando precisas de atualizações atómicas (sem locks manuais).
+Exemplo com Trello:
+Imagina que tens um contador global que guarda o número de tarefas concluídas.
+Vários utilizadores podem concluir tarefas ao mesmo tempo, então precisas de uma forma segura e atómica de atualizar este contador.
+
+scala
+Copy
+Edit
+object TrelloTaskCounter extends ZIOAppDefault {
+  def run = for {
+    counter <- Ref.make(0) // Criar um contador atómico inicializado a 0
+
+    // Fiber 1 - Utilizador A conclui 2 tarefas
+    fiber1 <- (counter.update(_ + 2)).fork
+
+    // Fiber 2 - Utilizador B conclui 3 tarefas
+    fiber2 <- (counter.update(_ + 3)).fork
+
+    // Esperar que as fibers terminem
+    _ <- fiber1.join
+    _ <- fiber2.join
+
+    // Obter o valor final do contador
+    finalCount <- counter.get
+    _ <- ZIO.succeed(println(s"Tarefas concluídas: $finalCount"))
+  } yield ()
+}
+Explicação:
+
+Ref.make(0): Cria um contador atómico inicializado a 0.
+.update(_ + 2): Atualiza o valor de forma atómica (sem condições de corrida).
+.get: Lê o valor atual de forma segura e consistente.
+fork: Executa as operações em paralelo.
+Resultado esperado: Tarefas concluídas: 5 (2 + 3).
+Métodos mais usados em Refs Atómicas:
+.get → Lê o valor atual de forma atómica.
+.set(novoValor) → Define um novo valor atómicamente (substitui o anterior).
+.update(f) → Atualiza o valor usando uma função.
+.modify(f) → Atualiza e devolve um resultado calculado a partir do valor atual.
+.updateAndGet(f) → Atualiza e devolve o valor atualizado.
+.getAndUpdate(f) → Devolve o valor atual e depois atualiza.
+Quando usar Atomic References?
+Quando precisas de guardar estados mutáveis em programas concorrentes.
+Para coordenar o acesso a recursos partilhados (ex.: contadores, flags, caches).
+Sempre que várias fibers precisarem de ler e atualizar o mesmo valor de forma consistente.
+Vantagens de Atomic References:
+Segurança na concorrência: As operações são atómicas, evitando condições de corrida.
+Performance: Mais eficiente que locks tradicionais (ex.: synchronized em Java).
+Consistência e confiabilidade: As atualizações são consistentes mesmo com múltiplas fibers.
+Fácil de usar: API simples e expressiva para leitura e atualização.
+Resumo:
+collectAllParDiscard → Executa múltiplos efeitos em paralelo, descartando os resultados.
+Atomic References (Ref) em ZIO são variáveis seguras para concorrência com atualizações atómicas.
+Garantem consistência e performance em programas assíncronos e concorrentes.
+No Trello, ajudam a contar tarefas concluídas, coordenar estados partilhados e manter consistência.
+Este conhecimento ajuda-te a escrever programas concorrentes seguros e eficientes em Scala ZIO!

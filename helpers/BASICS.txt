@@ -1,0 +1,37 @@
+Diferença entre => e <- no Contexto de flatMap e for Comprehension em Scala:
+1. promise => promise.await (usado em flatMap)
+Aqui, => é uma função anónima (lambda).
+O que fazes é mapear o valor contido na aPromise para um novo efeito (promise.await).
+Em flatMap, vais sempre usar => porque estás a definir como transformar o valor.
+2. promise <- promise.await (usado em for Comprehension)
+O <- é usado em for comprehensions em Scala, que é uma maneira mais limpa de encadear efeitos.
+Quando usas <-, estás a "desembrulhar" o valor do efeito.
+Basicamente, dizes: "Espera que este efeito aconteça e guarda o valor resultante na variável."
+Comparação com um Exemplo Prático:
+Usando flatMap (com =>)
+scala
+Copy
+Edit
+val reader = aPromise.flatMap { promise =>
+  promise.await
+}
+Aqui, flatMap pega no valor dentro de aPromise (ou seja, o Promise em si) e mapeia para um novo efeito (promise.await).
+O resultado de await é um novo ZIO, que é encadeado ao flatMap.
+Usando for Comprehension (com <-)
+scala
+Copy
+Edit
+val reader = for {
+  promise <- aPromise // "Desembrulha" o Promise de dentro do aPromise
+  result <- promise.await // "Desembrulha" o resultado do await
+} yield result
+Aqui, o <- está a extrair o valor de dentro do efeito (aPromise e depois promise.await).
+Cada <- espera que o efeito termine antes de continuar.
+O yield guarda o resultado final (result) no reader.
+Resumindo:
+=> → Usas em flatMap, quando queres mapear um valor para um novo efeito.
+<- → Usas em for comprehensions para "desembrulhar" efeitos e extrair valores.
+Ambos fazem a mesma coisa, mas a comprehension for é mais legível e próxima do estilo imperativo (passo a passo).
+Analogias para Ajudar na Memorização:
+Pensa em => como "o que fazer com o valor" (transfere, transforma).
+Pensa em <- como "abre a caixa e vê o que está lá dentro" (espera pelo valor).

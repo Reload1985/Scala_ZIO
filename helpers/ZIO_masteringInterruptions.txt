@@ -1,0 +1,67 @@
+Mastering Interruptions em Scala ZIO
+Em ZIO, Interruptions permitem parar a execução de um efeito (ou fibra) antes de ele terminar. Isto é útil, por exemplo, para cancelar uma operação que está a demorar muito tempo.
+
+Mas o que é uninterruptible e uninterruptibleMask?
+uninterruptible:
+
+Faz com que um bloco de código não possa ser interrompido. Ou seja, garante que o efeito vai ser concluído, mesmo que alguém tente pará-lo.
+Quando usar: Se tiveres uma operação crítica que não pode ser interrompida (ex.: salvar dados importantes na base de dados).
+Vantagem: Garante consistência e evita estados incompletos.
+uninterruptibleMask:
+
+É mais avançado. Permite marcar uma parte do código como ininterruptível, mas permite que outras partes sejam interrompidas.
+Quando usar: Quando precisas de uma mistura: proteger um bloco crítico, mas permitir que outras operações associadas possam ser interrompidas.
+Vantagem: Dá mais controlo e flexibilidade na gestão de interrupções.
+Exemplo com Trello:
+Imagina que no Trello queres mover uma tarefa de uma lista para outra. Isto envolve dois passos:
+
+Remover a tarefa da lista original.
+Adicionar a tarefa na nova lista.
+Se a remoção for feita, mas a adição for interrompida, a tarefa desapareceria do Trello! Para garantir consistência, podes usar uninterruptible.
+
+scala
+Copy
+Edit
+def moveTask(taskId: String, fromList: String, toList: String): ZIO[Any, Throwable, Unit] = {
+  ZIO.uninterruptible {
+    for {
+      _ <- ZIO.succeed(s"Removendo tarefa $taskId de $fromList").debugThread
+      _ <- ZIO.sleep(1.second) // Simula tempo para remover
+      _ <- ZIO.succeed(s"Adicionando tarefa $taskId em $toList").debugThread
+      _ <- ZIO.sleep(1.second) // Simula tempo para adicionar
+    } yield ()
+  }
+}
+Explicação:
+
+ZIO.uninterruptible: Garante que a tarefa não será perdida, pois a operação completa será executada, mesmo que alguém tente cancelar.
+.debugThread: Ajuda a ver na consola o que está a acontecer.
+ZIO.sleep(1.second): Simula o tempo de processamento (como acesso à base de dados).
+Exemplo usando uninterruptibleMask:
+Agora, imagina que remover a tarefa não pode ser interrompido, mas adicionar pode.
+
+scala
+Copy
+Edit
+def moveTaskWithMask(taskId: String, fromList: String, toList: String): ZIO[Any, Throwable, Unit] = {
+  ZIO.uninterruptibleMask { restore =>
+    for {
+      _ <- ZIO.succeed(s"Removendo tarefa $taskId de $fromList").debugThread
+      _ <- ZIO.sleep(1.second)
+      _ <- restore {
+        ZIO.succeed(s"Adicionando tarefa $taskId em $toList").debugThread *>
+          ZIO.sleep(2.seconds)
+      }
+    } yield ()
+  }
+}
+Explicação:
+
+ZIO.uninterruptibleMask: Marca o bloco inteiro como ininterruptível, mas permite que a parte dentro de restore { ... } seja interrompida.
+Se alguém cancelar enquanto a tarefa é removida, a operação continua.
+Se alguém cancelar enquanto a tarefa é adicionada, a operação pode ser interrompida.
+Resumo:
+uninterruptible: Usa quando não queres que uma operação seja cancelada, de forma nenhuma.
+uninterruptibleMask: Usa quando precisas de parte da operação protegida contra interrupções e outra parte que pode ser interrompida.
+Vantagens: Consistência e controlo nas operações críticas.
+No contexto do Trello, isto é útil para garantir que não perdes tarefas ou dados importantes se houver interrupções inesperadas, como tempo de rede ou um utilizador fechar a aplicação.
