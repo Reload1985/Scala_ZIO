@@ -1,0 +1,117 @@
+O que é um Mutex?
+Mutex é um mecanismo que garante que apenas uma operação de cada vez acesse um recurso compartilhado.
+Exemplo no mundo real: Imagina que tens uma única caneta e dois colegas querem escrever ao mesmo tempo. Se a caneta for um Mutex, apenas um colega pode usá-la por vez. O outro tem que esperar!
+Para que Serve um Mutex?
+Evita problemas de concorrência, como:
+Dados corrompidos quando várias threads tentam modificar o mesmo valor ao mesmo tempo.
+Inconsistências em leituras/escritas simultâneas.
+Em Que Situações Usar?
+Quando queres garantir consistência ao aceder um recurso compartilhado.
+Exemplos:
+Atualizar um contador que é usado por várias threads.
+Fazer alterações na base de dados de forma ordenada.
+No Trello: Garantir que apenas um utilizador pode mover um cartão de uma lista para outra de cada vez.
+Como Funciona no ZIO?
+Em ZIO, um Mutex é criado usando Refs e Promises:
+Ref: Guarda o estado (ex.: se o Mutex está livre ou ocupado).
+Promise: Serve para bloquear a operação até o recurso ficar livre.
+Como Construir um Mutex?
+Usa um Ref para guardar o estado:
+
+None: O Mutex está livre.
+Some(promise): O Mutex está ocupado e a Promise vai desbloquear quem está à espera.
+Quando uma thread quer usar o Mutex:
+
+Se estiver livre, ocupa-o (coloca uma Promise no Ref).
+Se estiver ocupado, espera pela Promise que está lá.
+Quando a thread termina:
+
+Verifica se alguém está à espera:
+Sim: Completa a Promise para acordar a próxima.
+Não: Liberta o Mutex (None).
+Exemplo no Trello: Mover um Cartão
+Vamos fazer um exemplo onde apenas um utilizador pode mover um cartão de uma lista para outra de cada vez.
+
+Código Explicado:
+scala
+Copy
+Edit
+object TrelloMutex extends ZIOAppDefault {
+
+  // 1. Criação do Mutex usando Ref e Promise
+  class Mutex(ref: Ref[Option[Promise[Nothing, Unit]]]) {
+    
+    // Método para adquirir o Mutex (espera se estiver ocupado)
+    def acquire: UIO[Unit] = 
+      Promise.make[Nothing, Unit].flatMap { promise =>
+        ref.modify {
+          case None => (ZIO.unit, Some(promise)) // Está livre, ocupa-o
+          case Some(currentPromise) => (currentPromise.await, Some(promise)) // Está ocupado, espera
+        }.flatten
+      }
+
+    // Método para libertar o Mutex
+    def release: UIO[Unit] = 
+      ref.modify {
+        case None => (ZIO.unit, None) // Nunca deveria acontecer
+        case Some(promise) => (promise.succeed(()).unit, None) // Liberta e acorda o próximo
+      }.flatten
+  }
+
+  // Função para criar um Mutex
+  object Mutex {
+    def make: UIO[Mutex] = Ref.make[Option[Promise[Nothing, Unit]]](None).map(new Mutex(_))
+  }
+
+  // 2. Exemplo: Mover um Cartão de uma Lista para Outra
+  def moveCard(card: String, from: String, to: String, mutex: Mutex): UIO[Unit] = for {
+    _ <- mutex.acquire  // Adquire o Mutex
+    _ <- ZIO.succeed(s"Moving card '$card' from '$from' to '$to'...").debugThread
+    _ <- ZIO.sleep(1.second) // Simula a operação de mover
+    _ <- ZIO.succeed(s"Card '$card' moved from '$from' to '$to'").debugThread
+    _ <- mutex.release  // Liberta o Mutex
+  } yield ()
+
+  // 3. Simulação com 2 Utilizadores a Tentar Mover ao Mesmo Tempo
+  def run = for {
+    mutex <- Mutex.make
+    _ <- (moveCard("Card1", "To Do", "In Progress", mutex) zipPar 
+          moveCard("Card2", "To Do", "Done", mutex))
+  } yield ()
+}
+O que Está Acontecer Aqui?
+Criação do Mutex:
+
+Mutex.make: Cria um Ref para armazenar o estado do Mutex (None ou Some(Promise)).
+Adquirir o Mutex (acquire):
+
+Verifica o estado:
+Se estiver livre (None):
+Ocupa o Mutex (Some(Promise)).
+Se estiver ocupado (Some(Promise)):
+Espera pela Promise antes de continuar.
+Libertar o Mutex (release):
+
+Verifica se alguém está à espera:
+Sim: Completa a Promise para acordar a próxima thread.
+Não: Liberta o Mutex (None).
+O Que Vai Aparecer na Consola?
+Se executares, vais ver algo como:
+
+
+Moving card 'Card1' from 'To Do' to 'In Progress'... (na Thread-1)
+Card 'Card1' moved from 'To Do' to 'In Progress' (na Thread-1)
+Moving card 'Card2' from 'To Do' to 'Done'... (na Thread-2)
+Card 'Card2' moved from 'To Do' to 'Done' (na Thread-2)
+Nunca vais ver as duas operações a acontecer ao mesmo tempo!
+Isso garante que um cartão é movido de cada vez, evitando condições de corrida.
+
+Vantagens:
+Evita condições de corrida: Garante consistência em dados compartilhados.
+Coordenação eficiente: Usa Promises para bloquear e acordar threads de forma eficiente.
+Seguro e Escalável: Ideal para concorrência em grande escala.
+
+Resumo Final:
+Um Mutex é usado para garantir acesso exclusivo a um recurso compartilhado.
+Refs + Promises em ZIO ajudam a construir Mutexes de forma segura e eficiente.
+No Trello, garantimos que apenas um utilizador pode mover um cartão de cada vez.
