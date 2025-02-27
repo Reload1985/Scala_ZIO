@@ -128,9 +128,7 @@ git show <id-do-commit>
 Forçar o Pull (Perderá as alterações locais do arquivo)
 Se não precisar do arquivo localmente e quiser simplesmente atualizar com o que está no repositório remoto, pode forçar o pull:
 
-powershell
-Copy
-Edit
+
 git fetch origin main
 git reset --hard origin/main
 Isso vai sobrescrever qualquer alteração local e sincronizar o diretório local com o repositório remoto.

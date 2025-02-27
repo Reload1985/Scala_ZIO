@@ -1,0 +1,267 @@
+ZIO STM Cheat Sheet
+
+1. Transactional Effects (STM)
+
+STM é usado para garantir atomicidade e consistência em operações concorrentes.
+
+Operações só são visíveis para outras transações após commit.
+
+Se um STM falha, a transação é descartada sem efeitos colaterais.
+
+Funções Principais:
+
+STM.succeed(value): Cria um STM com um valor de sucesso.
+
+STM.fail(error): Cria um STM que falha com um erro.
+
+STM.attempt(expr): Cria um STM que pode lançar uma exceção (convertida para Throwable).
+
+commit: Transforma um STM em um ZIO que executa a transação.
+
+val anSTM = STM.succeed(42)             // sucesso
+val aFailedSTM = STM.fail("error")      // falha
+val anAttemptSTM = STM.attempt(42 / 0)  // exceção
+val result = anAttemptSTM.commit         // executa a transação
+
+2. TRef (Atomic Variable)
+
+TRef é usado para armazenar e modificar valores atomicos.
+
+API: get, set, update, modify.
+
+Exemplos:
+
+val ref = TRef.make(100).commit
+val read = ref.get.commit                 // Lê o valor
+val update = ref.update(_ + 10).commit     // Atualiza atomicamente
+
+3. TArray (Atomic Array)
+
+Array transacional com API similar ao List: apply, update, transform.
+
+val tArray = TArray.fromIterable(List(1,2,3)).commit
+val elem = tArray(2).commit               // Acessa o 3º elemento
+val updatedArray = tArray.update(1, _ + 10).commit
+
+4. TSet (Atomic Set)
+
+Conjunto transacional com operações como put, delete, contains.
+
+val tSet = TSet.make(1,2,3).commit
+val contains = tSet.contains(2).commit     // true
+val updatedSet = tSet.put(4).commit        // adiciona 4
+
+5. TMap (Atomic Map)
+
+Mapa transacional com put, get, removeIf, retainIf.
+
+val tMap = TMap.make("key" -> 1).commit
+val value = tMap.get("key").commit        // Some(1)
+val updatedMap = tMap.put("key2", 2).commit
+
+6. TQueue (Atomic Queue)
+
+Fila transacional para sincronização concorrente.
+
+API: offer, offerAll, take, takeAll.
+
+val tQueue = TQueue.bounded .commit
+val offered = tQueue.offer(10).commit      // Adiciona um elemento
+val taken = tQueue.take.commit              // Remove e retorna o primeiro
+
+7. TPromise (Transactional Promise)
+
+Similar a Promise, mas transacional.
+
+API: succeed, fail, await.
+
+val tPromise = TPromise.make[String, Int].commit
+val success = tPromise.succeed(42).commit  // Completa com sucesso
+val result = tPromise.await.commit          // Aguarda o resultado
+
+8. TSemaphore (Transactional Semaphore)
+
+Controla o acesso concorrente a recursos compartilhados.
+
+API: acquire, release, withPermit.
+
+val tSem = TSemaphore.make(2).commit
+val acquire = tSem.acquire.commit          // Adquire um permit
+val release = tSem.release.commit           // Libera um permit
+
+9. TReentrantLock (Lock Reentrante)
+
+Leitura: Múltiplos leitores simultâneos.
+
+Escrita: Exclusiva (nenhum leitor ou outro escritor pode acessar).
+
+val lock = TReentrantLock.make.commit
+val acquireRead = lock.acquireRead.commit  // Adquire leitura
+val acquireWrite = lock.acquireWrite.commit // Adquire escrita
+val releaseRead = lock.releaseRead.commit
+
+10. Outras Funções e Utilidades
+
+fold/foldSTM: Reduz coleções transacionais.
+
+foreach: Itera sobre coleções transacionais.
+
+transform: Altera os elementos de TArray, TSet, TMap no local.
+
+val sum = TArray.fromIterable(List(1,2,3)).flatMap(_.fold(0)(_ + _)).commit
+
+Quando Usar STM?
+
+Quando precisar de consistência e atomicidade em múltiplas operações concorrentes.
+
+Para evitar deadlocks e race conditions.
+
+Em casos de coordenação complexa (e.g., readers-writers).
+
+Vantagens
+
+Atomicidade: Transações são completamente aplicadas ou descartadas.
+
+Composição: Fácil de compor com outras transações STM.
+
+Consistência: Sem efeitos colaterais visíveis fora da transação até o commit.
+
+Use este cheat sheet como referência rápida enquanto trabalhas com STM em ZIO!
+
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+1. STM (Software Transactional Memory)
+O que é:
+
+STM é um modelo de concorrência que permite manipular memória compartilhada de forma segura e livre de bloqueios.
+Funciona como transações de banco de dados, garantindo consistência e atomicidade (tudo ou nada).
+Se várias operações em paralelo tentarem modificar os mesmos dados, a STM reexecuta as operações de forma transparente até que não haja conflitos.
+Funções mais usadas:
+
+TRef: Referência transacional (como um "var" seguro para concorrência).
+scala
+Copy
+Edit
+TRef.make(0) // Cria um TRef com valor inicial 0
+STM.atomically: Executa um bloco de código STM de forma atômica.
+scala
+Copy
+Edit
+STM.atomically {
+  for {
+    value <- ref.get
+    _ <- ref.set(value + 1)
+  } yield value
+}
+STM.retry: Faz a transação esperar até que uma condição seja satisfeita (reativa automaticamente).
+STM.orElse: Tenta a primeira transação, se falhar tenta a próxima.
+Quando usar:
+
+Para manipular estados compartilhados em um ambiente altamente concorrente.
+No Trello:
+Garantir consistência ao atualizar o número de tarefas concluídas em um quadro compartilhado por vários usuários.
+Evitar condições de corrida ao alterar o status de uma tarefa (ex.: de "Em Progresso" para "Concluído").
+2. Transactional Effects
+O que são:
+
+Effects que garantem consistência e atomicidade.
+Combinam STM com ZIO para manipular estados de forma transacional e assíncrona.
+Garantem que uma sequência de operações ocorra completamente ou nenhuma delas ocorra.
+Funções mais usadas:
+
+STM.atomically: Executa a transação completa como um ZIO Effect.
+.commit: Converte um STM em um ZIO Effect.
+.map, .flatMap: Para transformar e encadear operações transacionais.
+Quando usar:
+
+Para manter a integridade de estados complexos e interdependentes.
+No Trello:
+Garantir que ao mover uma tarefa de uma lista para outra, ela seja removida de uma lista e adicionada à outra de forma atômica.
+Evitar estados inconsistentes em caso de falha na atualização do status da tarefa.
+3. Data Structures em STM
+O que são:
+
+Estruturas de dados específicas para STM que permitem manipulação concorrente segura.
+Garantem que operações sobre essas estruturas sejam atômicas e livres de condições de corrida.
+Principais Estruturas:
+
+TRef: Referência transacional para valores únicos (como uma variável atômica).
+scala
+Copy
+Edit
+val counter = TRef.make(0)
+TArray: Array transacional para trabalhar com coleções de forma segura.
+TMap: Mapa transacional para armazenar pares chave-valor.
+scala
+Copy
+Edit
+TMap.empty[String, Task] // Ex.: Mapear IDs para tarefas no Trello
+TQueue: Fila transacional para comunicação segura entre Fibers.
+scala
+Copy
+Edit
+TQueue.unbounded[Int] // Fila sem limite para processamento de eventos
+Quando usar:
+
+Para manipular estados complexos ou coleções compartilhadas em cenários concorrentes.
+No Trello:
+TMap: Para armazenar tarefas por ID de forma segura ao acessar simultaneamente.
+TQueue: Para gerenciar notificações em tempo real, como novos comentários em tarefas.
+4. Concurrent Coordination
+O que é:
+
+Coordenação entre múltiplas operações concorrentes para evitar conflitos e garantir a ordem correta.
+Garante que threads (Fibers) interajam sem condições de corrida.
+Principais Ferramentas:
+
+Promise: Representa um valor que será definido no futuro, útil para sincronizar Fibers.
+scala
+Copy
+Edit
+for {
+  promise <- Promise.make[Nothing, Int]
+  _ <- (ZIO.sleep(2.seconds) *> promise.succeed(42)).fork
+  result <- promise.await // Aguarda o valor ser definido
+} yield result
+Semaphore: Controla o acesso concorrente a um recurso limitado.
+scala
+Copy
+Edit
+val semaphore = Semaphore.make(2) // Máximo de 2 acessos simultâneos
+CountdownLatch: Sincroniza a execução esperando múltiplos eventos ocorrerem.
+Hub e Queue: Para comunicação eficiente entre múltiplos produtores e consumidores.
+Quando usar:
+
+Para coordenar a execução concorrente de múltiplas tarefas.
+No Trello:
+Promise: Para sincronizar a conclusão de tarefas dependentes.
+Semaphore: Para limitar o número de acessos simultâneos a um recurso, como chamadas a uma API externa.
+Queue: Para gerenciar filas de eventos em tempo real, como notificações de novos comentários.
+Vantagens Gerais
+STM:
+
+Evita deadlocks e condições de corrida.
+Facilita o desenvolvimento concorrente com uma abordagem declarativa e composicional.
+Transactional Effects:
+
+Garantem consistência e atomicidade em efeitos assíncronos.
+Ideal para operações complexas que requerem rollback em caso de falha.
+Data Structures:
+
+Manipulação concorrente segura de coleções e estados complexos.
+Otimizadas para desempenho em ambientes altamente concorrentes.
+Concurrent Coordination:
+
+Sincronização eficiente e segura de múltiplas operações concorrentes.
+Facilita a comunicação entre Fibers, evitando condições de corrida.
+Resumo para o Trello
+STM: Para manipular estados compartilhados, como contagem de tarefas concluídas.
+Transactional Effects: Para garantir a integridade de mudanças complexas, como mover tarefas entre listas.
+Data Structures: Para armazenar e manipular coleções de tarefas com segurança concorrente.
+Concurrent Coordination: Para sincronizar operações dependentes, como notificações em tempo real.

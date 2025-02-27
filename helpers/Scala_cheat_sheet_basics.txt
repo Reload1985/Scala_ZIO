@@ -1,0 +1,103 @@
+Scala Basics Cheat Sheet com Exemplos no Contexto Trello
+
+Variáveis e Valores
+
+Uso: Armazenar informações sobre quadros, listas e tarefas.
+
+val boardName = "Projeto X"  // Imutável
+var taskCount = 5            // Mutável
+
+Quando Usar:
+
+val para constantes, como nomes de quadros ou estados que não mudam.
+
+var para contadores ou estados que mudam.
+
+Condicionais
+
+Uso: Definir lógica para organização de tarefas.
+
+if (taskCount > 10) println("Muitas tarefas!")
+else println("Gerenciável!")
+
+Quando Usar:
+
+Decisões simples baseadas em contagem ou estado de listas.
+
+Match Case (Pattern Matching)
+
+Uso: Classificar estados de tarefas.
+
+val status = "done"
+status match {
+  case "todo" => println("Para fazer")
+  case "in-progress" => println("Em andamento")
+  case "done" => println("Concluído")
+  case _ => println("Estado desconhecido")
+}
+
+Quando Usar:
+
+Para estados fixos (e.g., status de tarefas: todo, in-progress, done).
+
+Funções
+
+Uso: Organizar lógicas de tarefas.
+
+def addTask(tasks: List[String], newTask: String): List[String] =
+  tasks :+ newTask
+
+Quando Usar:
+
+Para reaproveitar código (e.g., adicionar, remover ou atualizar tarefas).
+
+Collections (List, Map, Set)
+
+Uso: Armazenar listas de tarefas ou mapeamentos de IDs.
+
+val tasks = List("Task1", "Task2", "Task3")
+val boardMap = Map("ToDo" -> tasks, "Done" -> List.empty)
+
+Quando Usar:
+
+List: Para ordenação de tarefas.
+
+Map: Para agrupar tarefas por status.
+
+Set: Para garantir unicidade (tarefas únicas).
+
+For Comprehensions
+
+Uso: Iterar e manipular listas de tarefas.
+
+val completedTasks = for (task <- tasks if task.contains("Done")) yield task
+
+Quando Usar:
+
+Para filtrar ou transformar listas com elegância.
+
+Effects e Fibers
+
+Effects
+
+Uso: Gerir operações assíncronas (ex.: chamadas de API).
+
+val apiCall = ZIO.succeed("Dados recebidos")
+
+Quando Usar:
+
+Para IO, HTTP requests, e outras operações que podem falhar.
+
+Fibers
+
+Uso: Executar operações concorrentes (ex.: múltiplas chamadas de API).
+
+val fiber = apiCall.fork
+fiber.join
+
+Quando Usar:
+
+Para executar tarefas independentes em paralelo (ex.: buscar dados de múltiplos quadros simultaneamente).
+
+Esse cheat sheet adapta os conceitos básicos de Scala para um cenário prático de um Trello, ajudando a aplicar a linguagem de forma contextualizada. Se precisar de ajustes, é só avisar!
+

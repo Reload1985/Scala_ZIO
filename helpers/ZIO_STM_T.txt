@@ -1,0 +1,111 @@
+ZIO STM Cheat Sheet com Exemplos no Contexto Trello
+
+TRef (Atomic Variable)
+
+Uso: Gerir estado compartilhado, como listas de tarefas ou informações de cartões.
+
+val boardState = TRef.make(Map("ToDo" -> List.empty[String], "Done" -> List.empty[String])).commit
+
+Exemplo: Adicionar tarefa numa lista:
+
+val addTask = for {
+  board <- boardState
+  _ <- board.update(boardMap => boardMap.updated("ToDo", boardMap("ToDo") :+ "Nova Tarefa"))
+} yield ()
+
+TArray (Array Atômico)
+
+Uso: Ordenar e organizar tarefas.
+
+val taskOrder = TArray.fromIterable(List("Task1", "Task2", "Task3")).commit
+
+Exemplo: Reordenar tarefas:
+
+val reorderTasks = for {
+  tasks <- taskOrder
+  _ <- tasks.update(0, _ + " - Atualizado")
+} yield ()
+
+TSet (Set Atômico)
+
+Uso: Controlar tarefas únicas (sem duplicados).
+
+val uniqueTasks = TSet.make("Task1", "Task2").commit
+
+Exemplo: Adicionar tarefa se ainda não existir:
+
+val addUniqueTask = for {
+  tasks <- uniqueTasks
+  _ <- tasks.put("Task3")
+} yield ()
+
+TMap (Mapa Atômico)
+
+Uso: Relacionar IDs de cartões com informações detalhadas.
+
+val cardDetails = TMap.make(("card1", "Detalhes..."), ("card2", "Mais Detalhes...")).commit
+
+Exemplo: Atualizar detalhes de um cartão:
+
+val updateCard = for {
+  cards <- cardDetails
+  _ <- cards.put("card1", "Atualizado!")
+} yield ()
+
+TQueue (Fila Atômica)
+
+Uso: Gerir tarefas em fila (como notificações ou atividades).
+
+val activityQueue = TQueue.bounded[String](10).commit
+
+Exemplo: Enfileirar notificação de atividade:
+
+val enqueueActivity = for {
+  queue <- activityQueue
+  _ <- queue.offer("Nova atividade: Tarefa criada")
+} yield ()
+
+TPromise (Promise Atômica)
+
+Uso: Sincronizar eventos, como conclusão de tarefas dependentes.
+
+val taskCompletion = TPromise.make[Nothing, String].commit
+
+Exemplo: Notificar conclusão de tarefa:
+
+val notifyCompletion = for {
+  promise <- taskCompletion
+  _ <- promise.succeed("Tarefa concluída")
+} yield ()
+
+TSemaphore (Semáforo Atômico)
+
+Uso: Controlar acessos concorrentes, como edições simultâneas em cartões.
+
+val editSemaphore = TSemaphore.make(1).commit
+
+Exemplo: Garantir exclusividade na edição de um cartão:
+
+val editCard = editSemaphore.flatMap { sem =>
+  sem.withPermit {
+    ZIO.succeed("Editando cartão com exclusividade")
+  }
+}
+
+TReentrantLock (Lock Reentrante)
+
+Uso: Gerir leitura/escrita concorrente em informações do quadro.
+
+val boardLock = TReentrantLock.make.commit
+
+Exemplo: Ler estado do quadro com segurança:
+
+val readBoardState = for {
+  lock <- boardLock
+  _ <- lock.acquireRead.commit
+  _ <- ZIO.succeed("Lendo estado do quadro...")
+  _ <- lock.releaseRead.commit
+} yield ()
+
+Esse cheat sheet adapta cada conceito de STM para um cenário prático de um Trello, facilitando a aplicação dos conceitos de forma contextualizada. Qualquer ajuste é só falar!
+
