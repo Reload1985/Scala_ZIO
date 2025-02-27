@@ -1,0 +1,93 @@
+O Que é um Semaphore?
+Pensa num semaphore como um controle de acesso que limita o número de tarefas que podem fazer alguma coisa ao mesmo tempo.
+
+🔑 Como Funciona:
+Imagina que tens 3 chaves para um banheiro público. Se 3 pessoas estiverem lá dentro:
+Quem chegar depois espera até alguém sair e devolver uma chave.
+Quando uma pessoa sai, libera uma chave e outra pode entrar.
+No contexto de programação:
+Um Semaphore controla o número máximo de tarefas que podem acessar um recurso crítico ao mesmo tempo.
+Se não houver permissão disponível, as outras esperam.
+Por Que Usar Semaphore?
+Controlar Acesso Concorrente: Garantir que apenas X tarefas executem uma ação ao mesmo tempo.
+Evitar Sobrecarga: Controlar o uso de recursos (ex.: acesso a uma API limitada a X requisições por segundo).
+Coordenar Tarefas: Garantir que algumas tarefas esperem enquanto outras concluem suas operações críticas.
+Quando Usar?
+Quando precisas limitar o acesso a um recurso partilhado.
+Exemplo:
+Apenas 2 utilizadores podem editar um quadro do Trello ao mesmo tempo para evitar conflitos.
+Exemplo no Trello:
+Imagina que tens uma funcionalidade no Trello onde:
+
+Máximo 2 utilizadores podem editar a mesma lista de tarefas ao mesmo tempo.
+Se houver 3 ou mais, eles devem esperar.
+Vamos ao Código!
+scala
+Copy
+Edit
+import zio._
+import zio.duration._
+
+object TrelloSemaphoreExample extends ZIOAppDefault {
+
+  // Simula a edição de uma lista de tarefas
+  def editList(listId: Int): UIO[Int] = for {
+    _ <- ZIO.succeed(s"[List $listId] Editing...").debugThread
+    _ <- ZIO.sleep(2.seconds) // Simula o tempo de edição
+    _ <- ZIO.succeed(s"[List $listId] Edit completed!").debugThread
+  } yield listId
+
+  // O Semaphore para limitar a edição a no máximo 2 utilizadores
+  val semaphoreExample = for {
+    sem <- Semaphore.make(2) // Máximo de 2 permissões
+    results <- ZIO.collectAllPar((1 to 5).map { listId =>
+      sem.withPermit {
+        editList(listId)
+      }
+    })
+  } yield results
+
+  def run = semaphoreExample.debugThread
+}
+🔍 O Que Acontece Aqui?
+Semaphore.make(2) cria um Semaphore com 2 permissões:
+No máximo 2 tasks podem editar ao mesmo tempo.
+.withPermit:
+Cada editList(listId) precisa de uma permissão para começar.
+Se já houver 2 permissões em uso, a task espera.
+collectAllPar:
+Executa todas as edições em paralelo, mas respeitando o limite do Semaphore.
+debugThread:
+Imprime na consola em que thread a task está a correr, para ver o paralelismo em ação.
+O Que Vais Ver na Consola?
+Apenas 2 listas estão a ser editadas ao mesmo tempo.
+As outras esperam até que uma edição seja concluída.
+Exemplo:
+
+csharp
+Copy
+Edit
+[List 1] Editing...
+[List 2] Editing...
+[List 1] Edit completed!
+[List 3] Editing...
+[List 2] Edit completed!
+[List 4] Editing...
+[List 3] Edit completed!
+[List 5] Editing...
+[List 4] Edit completed!
+[List 5] Edit completed!
+Funções Mais Usadas:
+Semaphore.make(n: Long): Cria um Semaphore com n permissões.
+.withPermit(effect: ZIO): Executa o efeito se houver uma permissão disponível, caso contrário, espera.
+.withPermits(n: Long): Requer n permissões para continuar.
+Vantagens:
+Controle Preciso: Controla exatamente quantas tarefas podem aceder a um recurso crítico.
+Evita Conflitos: No Trello, evita que múltiplos utilizadores editem ao mesmo tempo, prevenindo conflitos de dados.
+Melhor Desempenho: Coordena tarefas em paralelo, aproveitando o máximo de recursos sem sobrecarga.
+Resumo:
+Semaphore é um controle de acesso que limita quantas tasks podem rodar ao mesmo tempo.
+Ideal para coordenar acessos a recursos partilhados.
+No Trello, controla o número de utilizadores a editar ao mesmo tempo.
+withPermit é a chave para garantir o acesso controlado.
+Ajuda a evitar conflitos e melhorar o desempenho.
